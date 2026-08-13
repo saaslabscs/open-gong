@@ -5,6 +5,7 @@ GOOD_EXTRACTION: dict = {"summary": [], "objections": [], "next_steps": []}
 GOOD_SCORE: dict = {}
 GOOD_COMPLIANCE: dict = {"findings": []}
 GOOD_EMAIL = {"subject": "Follow-up", "body": "Hi — recapping our call."}
+GOOD_SKILL_OUTPUT: dict = {}
 
 
 def fake_llm(responses: dict):
@@ -30,6 +31,11 @@ def fake_llm(responses: dict):
             if isinstance(r, Exception):
                 raise r
             return r, 0.004
+        if "Run this skill:" in user:
+            r = responses.get("skill", GOOD_SKILL_OUTPUT)
+            if isinstance(r, Exception):
+                raise r
+            return r, 0.01
         raise AssertionError(f"unexpected prompt: {user[:80]}")
 
     return fake
