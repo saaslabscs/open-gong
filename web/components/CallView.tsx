@@ -5,17 +5,16 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getCall,
   retryCall,
-  saveInsights,
-  resetInsights,
+  editAgentRunOutput,
+  resetAgentRunOutput,
   createShare,
   exportMarkdownUrl,
   exportJsonUrl,
   type CallDetail,
-  type Insights,
   type Evidence,
+  type AgentRunSummary,
 } from "@/lib/api";
 import { humanizeStatus, tonePill, stageLabels } from "@/lib/status";
-import Header from "@/components/Header";
 
 function jumpTo(line: number) {
   const el = document.getElementById(`line-${line}`);
@@ -28,8 +27,7 @@ function jumpTo(line: number) {
 
 function Cite({ evidence }: { evidence: Evidence[] }) {
   if (!evidence?.length) return null;
-  // one chip per claim; jumps to the first cited line, tooltip lists all quotes
-  const title = evidence.map((e) => `L${e.line}: “${e.quote}”`).join("\n");
+  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
   return (
     <button className="cite" title={title} onClick={() => jumpTo(evidence[0].line)}>
       ❝ proof{evidence.length > 1 ? ` ·${evidence.length}` : ""}
@@ -37,11 +35,119 @@ function Cite({ evidence }: { evidence: Evidence[] }) {
   );
 }
 
+function renderScalarField(value: unknown): { text: string; evidence: Evidence[] } {
+  if (value && typeof value === "object" && "score" in (value as Record<string, unknown>)) {
+    const v = value as { score: number; justification?: string; evidence: Evidence[] };
+    return { text: `${v.score} — ${v.justification ?? ""}`, evidence: v.evidence ?? [] };
+  }
+  if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
+    const v = value as { value: boolean | null; evidence: Evidence[] };
+    return { text: v.value ? "yes" : v.value === false ? "no" : "—", evidence: v.evidence ?? [] };
+  }
+  return { text: String(value ?? ""), evidence: [] };
+}
+
+function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<string, unknown> }) {
+  return (
+    <div className="card">
+      <div className="eyebrow">{skillName.replaceAll("-", " ")}</div>
+      <ul className="mt-2 space-y-2 text-sm leading-relaxed">
+        {Object.entries(fields).map(([name, value]) => {
+          if (Array.isArray(value)) {
+            const items = value as { text: string; evidence: Evidence[] }[];
+            if (items.length === 0) return <li key={name} className="text-neutral-400">{name.replaceAll("_", " ")}: none</li>;
+            return items.map((item, i) => (
+              <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} /></li>
+            ));
+          }
+          const rendered = renderScalarField(value);
+          return (
+            <li key={name} className="flex items-center gap-2">
+              <span className="capitalize text-neutral-700">{name.replaceAll("_", " ")}:</span>
+              <span className="font-medium">{rendered.text}</span>
+              <Cite evidence={rendered.evidence} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AgentRunCard({ callId, agentRun, onChanged }: { callId: string; agentRun: AgentRunSummary; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draftText, setDraftText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function startEdit() {
+    setDraftText(JSON.stringify(agentRun.output ?? {}, null, 2));
+    setError(null);
+    setEditing(true);
+  }
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const parsed = JSON.parse(draftText);
+      await editAgentRunOutput(callId, agentRun.id, parsed);
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reset() {
+    setBusy(true);
+    try {
+      await resetAgentRunOutput(callId, agentRun.id);
+      setEditing(false);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">
+          {agentRun.agent_name}
+          {agentRun.edited && <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-xs text-purple-700">edited by you</span>}
+        </h2>
+        {!editing ? (
+          <button onClick={startEdit} className="btn text-xs">Edit</button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={save} disabled={busy} className="btn btn-primary text-xs">Save</button>
+            <button onClick={() => setEditing(false)} className="btn text-xs">Cancel</button>
+            {agentRun.edited && <button onClick={reset} disabled={busy} className="btn text-xs">Revert to AI original</button>}
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div>
+          <textarea
+            className="edit-field min-h-[240px] w-full font-mono text-xs"
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+          />
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+      ) : (
+        Object.entries(agentRun.output ?? {}).map(([skillName, fields]) => (
+          <SkillOutput key={skillName} skillName={skillName} fields={fields} />
+        ))
+      )}
+    </div>
+  );
+}
+
 export default function CallView({ id }: { id: string }) {
   const [data, setData] = useState<CallDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Insights | null>(null);
   const [share, setShare] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,10 +168,10 @@ export default function CallView({ id }: { id: string }) {
   if (err) return <Shell><p className="text-sm text-red-600">{err}</p></Shell>;
   if (!data) return <Shell><p className="text-sm text-neutral-500">Loading…</p></Shell>;
 
-  const { call, run, transcript, insights, compliance } = data;
+  const { call, run, transcript, agent_runs } = data;
   const st = humanizeStatus(run.status);
 
-  if (!transcript || !insights) {
+  if (!transcript || agent_runs.length === 0) {
     return (
       <Shell>
         <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
@@ -77,41 +183,21 @@ export default function CallView({ id }: { id: string }) {
     );
   }
 
-  const view = editing && draft ? draft : insights;
-  const email = view.follow_up_email;
-
-  async function startEdit() { setDraft(JSON.parse(JSON.stringify(insights))); setEditing(true); }
-  async function save() {
-    if (!draft) return;
-    setBusy(true);
-    try { await saveInsights(id, draft); setEditing(false); await load(); } finally { setBusy(false); }
-  }
-  async function reset() {
-    setBusy(true);
-    try { await resetInsights(id); setEditing(false); await load(); } finally { setBusy(false); }
-  }
   async function doRetry() { setBusy(true); try { await retryCall(id); await load(); } finally { setBusy(false); } }
   async function doShare() {
     setBusy(true);
     try { const { token } = await createShare(id); setShare(`${window.location.origin}/share/${token}`); } finally { setBusy(false); }
   }
-  function copyEmail() {
-    if (!email) return;
-    navigator.clipboard.writeText(`Subject: ${email.subject}\n\n${email.body}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+
+  const failedSteps = agent_runs.flatMap((ar) => ar.steps.filter((s) => s.status === "failed"));
 
   return (
     <Shell>
-      {/* Title row */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
           <p className="mt-1 text-xs text-neutral-500">
-            {view.intent?.value && <span className="capitalize">{view.intent.value} call · </span>}
             {call.participants.join(", ")} · {new Date(call.recorded_at).toLocaleDateString()}
-            {run.edited && <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-purple-700">edited by you</span>}
           </p>
         </div>
         <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${tonePill[st.tone]}`}>
@@ -120,122 +206,53 @@ export default function CallView({ id }: { id: string }) {
         </span>
       </div>
 
-      {/* Flags */}
-      {(run.status === "partial" || run.status === "failed") && <FailureBanner run={run} insights={insights} onRetry={doRetry} busy={busy} />}
+      {(run.status === "partial" || run.status === "failed") && failedSteps.length > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              {failedSteps.map((s) => (
+                <div key={s.name}><strong>{stageLabels[s.name] ?? s.name}</strong> couldn&apos;t finish: {s.error}</div>
+              ))}
+            </div>
+            <button onClick={doRetry} disabled={busy} className="btn btn-warn shrink-0">Retry</button>
+          </div>
+        </div>
+      )}
 
-      {/* Toolbar */}
+      {run.orchestrator_reasoning && (
+        <p className="mt-3 text-xs text-neutral-400">Why these agents ran: {run.orchestrator_reasoning}</p>
+      )}
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {!editing ? (
-          <>
-            <button onClick={doShare} disabled={busy} className="btn">Share link</button>
-            <a href={exportMarkdownUrl(id)} className="btn" download>Export .md</a>
-            <a href={exportJsonUrl(id)} className="btn" download>Export .json</a>
-            <button onClick={startEdit} className="btn">Edit notes</button>
-          </>
-        ) : (
-          <>
-            <button onClick={save} disabled={busy} className="btn btn-primary">Save</button>
-            <button onClick={() => setEditing(false)} className="btn">Cancel</button>
-            {run.edited && <button onClick={reset} disabled={busy} className="btn">Revert to AI original</button>}
-            <span className="text-xs text-neutral-400">Editing the notes — evidence stays attached.</span>
-          </>
-        )}
+        <button onClick={doShare} disabled={busy} className="btn">Share link</button>
+        <a href={exportMarkdownUrl(id)} className="btn" download>Export .md</a>
+        <a href={exportJsonUrl(id)} className="btn" download>Export .json</a>
       </div>
 
       {share && (
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
           <span className="text-emerald-800">Public link:</span>
           <input readOnly value={share} className="flex-1 bg-transparent text-emerald-900" />
-          <button onClick={() => navigator.clipboard.writeText(share)} className="btn">Copy</button>
+          <button onClick={() => { navigator.clipboard.writeText(share); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="btn">
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
           <button onClick={() => setShare(null)} className="text-neutral-400">✕</button>
         </div>
       )}
 
-      {/* Two columns: notes (primary) + transcript (reference) */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="space-y-5 lg:col-span-7">
-          <div className="card">
-            <div className="eyebrow">Summary</div>
-            <ul className="mt-2 space-y-2 text-sm leading-relaxed">
-              {view.summary.map((s, i) => (
-                <li key={i}>
-                  {editing && draft ? (
-                    <textarea className="edit-field" value={draft.summary[i].text}
-                      onChange={(e) => { const d = { ...draft }; d.summary[i].text = e.target.value; setDraft({ ...d }); }} />
-                  ) : (<>{s.text} <Cite evidence={s.evidence} /></>)}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="card">
-            <div className="eyebrow">Next steps</div>
-            <ul className="mt-2 space-y-2 text-sm">
-              {view.next_steps.map((n, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="text-neutral-300">▸</span>
-                  <span>
-                    {editing && draft ? (
-                      <textarea className="edit-field" value={draft.next_steps[i].text}
-                        onChange={(e) => { const d = { ...draft }; d.next_steps[i].text = e.target.value; setDraft({ ...d }); }} />
-                    ) : (<>{n.text}{n.owner && <span className="text-neutral-400"> — {n.owner}</span>} <Cite evidence={n.evidence} /></>)}
-                  </span>
-                </li>
-              ))}
-              {view.next_steps.length === 0 && <li className="text-sm text-neutral-400">None captured.</li>}
-            </ul>
-          </div>
-
-          {email && (
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div className="eyebrow">Follow-up email</div>
-                {!editing && (
-                  <button onClick={copyEmail} className="btn text-xs">{copied ? "Copied ✓" : "Copy email"}</button>
-                )}
-              </div>
-              {editing && draft && draft.follow_up_email ? (
-                <div className="mt-2 space-y-2">
-                  <input className="edit-field font-medium" value={draft.follow_up_email.subject}
-                    onChange={(e) => { const d = { ...draft }; d.follow_up_email!.subject = e.target.value; setDraft({ ...d }); }} />
-                  <textarea className="edit-field min-h-[160px]" value={draft.follow_up_email.body}
-                    onChange={(e) => { const d = { ...draft }; d.follow_up_email!.body = e.target.value; setDraft({ ...d }); }} />
-                </div>
-              ) : (
-                <div className="mt-2 text-sm">
-                  <p className="font-medium">{email.subject}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-neutral-700">{email.body}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {view.objections.length > 0 && (
-            <div className="card">
-              <div className="eyebrow">Objections &amp; concerns</div>
-              <ul className="mt-2 space-y-2 text-sm">
-                {view.objections.map((o, i) => (
-                  <li key={i}>
-                    <span className="font-medium capitalize">{o.label}</span>
-                    {o.status && <span className="ml-1 text-xs text-neutral-500">({o.status})</span>}: {o.detail} <Cite evidence={o.evidence} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <Scorecard sc={view.scorecard} />
-
-          {compliance && <ComplianceDetails compliance={compliance} />}
+        <div className="space-y-6 lg:col-span-7">
+          {agent_runs.map((ar) => (
+            <AgentRunCard key={ar.id} callId={id} agentRun={ar} onChanged={load} />
+          ))}
           <ProcessingDetails run={run} />
         </div>
 
-        {/* Transcript */}
         <div className="lg:col-span-5">
           <div className="sticky top-4">
             <div className="mb-2 flex items-center justify-between">
               <div className="eyebrow">Transcript</div>
-              <span className="text-xs text-neutral-400">click “❝ proof” in the notes to jump here</span>
+              <span className="text-xs text-neutral-400">click &quot;❝ proof&quot; in the notes to jump here</span>
             </div>
             <ol className="max-h-[72vh] space-y-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white p-4 text-sm">
               {transcript.lines.map((l) => (
@@ -254,78 +271,10 @@ export default function CallView({ id }: { id: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <Header />
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <Link href="/" className="text-xs text-neutral-500 hover:text-neutral-800">← All calls</Link>
-        <div className="mt-3">{children}</div>
-      </main>
-    </>
-  );
-}
-
-function Scorecard({ sc }: { sc: Insights["scorecard"] }) {
-  const checks = sc.fields.filter((f) => f.kind === "deterministic");
-  const scores = sc.fields.filter((f) => f.kind === "judgment");
-  return (
-    <div className="card">
-      <div className="eyebrow">Scorecard <span className="text-neutral-300">· {sc.pack}</span></div>
-      {checks.length > 0 && (
-        <ul className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-          {checks.map((f) => (
-            <li key={f.name} className="flex items-center gap-2">
-              <span className={f.value ? "text-emerald-600" : f.value === false ? "text-neutral-300" : "text-neutral-300"}>
-                {f.value ? "✓" : "○"}
-              </span>
-              <span className="capitalize text-neutral-700">{f.name.replaceAll("_", " ")}</span>
-              <Cite evidence={f.evidence} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {scores.length > 0 && (
-        <div className="mt-4 space-y-3">
-          {scores.map((f) => (
-            <div key={f.name}>
-              <div className="flex items-center justify-between text-sm">
-                <span className="capitalize font-medium">{f.name.replaceAll("_", " ")}</span>
-                <span className="text-neutral-500">{f.score}/{f.max_score}</span>
-              </div>
-              <div className="mt-1 h-1.5 rounded-full bg-neutral-100">
-                <div className="h-1.5 rounded-full bg-neutral-800" style={{ width: `${((f.score ?? 0) / (f.max_score ?? 5)) * 100}%` }} />
-              </div>
-              {f.justification && <p className="mt-1 text-xs text-neutral-500">{f.justification} <Cite evidence={f.evidence} /></p>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ComplianceDetails({ compliance }: { compliance: NonNullable<CallDetail["compliance"]> }) {
-  const checkedBy = compliance.source === "trace" ? "PyAI Trace" : "Open Gong's built-in check";
-  return (
-    <details className="card">
-      <summary className="cursor-pointer text-sm font-medium text-neutral-700">
-        Compliance review — {compliance.verdict === "PASS" ? "no issues found" : "flagged for review"}
-        <span className="text-xs font-normal text-neutral-400"> (internal only, never shared)</span>
-      </summary>
-      {compliance.findings.length > 0 ? (
-        <ul className="mt-3 space-y-2 text-sm">
-          {compliance.findings.map((f, i) => (
-            <li key={i}>
-              <span className="font-medium capitalize">{f.rule.replaceAll("_", " ")}</span>{" "}
-              <span className="text-xs uppercase text-red-600">{f.severity}</span>
-              <span className="block text-neutral-600">{f.detail}</span> <Cite evidence={f.evidence} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-sm text-neutral-500">Nothing flagged.</p>
-      )}
-      <p className="mt-2 text-xs text-neutral-400">checked by {checkedBy} · ref {compliance.audit_hash}</p>
-    </details>
+    <main className="mx-auto max-w-5xl px-6 py-8">
+      <Link href="/" className="text-xs text-neutral-500 hover:text-neutral-800">← All calls</Link>
+      <div className="mt-3">{children}</div>
+    </main>
   );
 }
 
@@ -347,29 +296,5 @@ function ProcessingDetails({ run }: { run: CallDetail["run"] }) {
         ))}
       </div>
     </details>
-  );
-}
-
-function FailureBanner({ run, insights, onRetry, busy }: {
-  run: CallDetail["run"]; insights: Insights; onRetry: () => void; busy: boolean;
-}) {
-  const failed = run.stages.filter((s) => s.status === "failed");
-  const dropped = insights.dropped_claims ?? [];
-  return (
-    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          {failed.map((s) => (
-            <div key={s.name}><strong>{stageLabels[s.name] ?? s.name}</strong> couldn’t finish: {s.error}</div>
-          ))}
-          {dropped.length > 0 && (
-            <div className={failed.length ? "mt-1" : ""}>
-              {dropped.length} claim{dropped.length > 1 ? "s were" : " was"} dropped — no proof in the transcript, so {dropped.length > 1 ? "they" : "it"} didn’t ship.
-            </div>
-          )}
-        </div>
-        {failed.length > 0 && <button onClick={onRetry} disabled={busy} className="btn btn-warn shrink-0">Retry</button>}
-      </div>
-    </div>
   );
 }

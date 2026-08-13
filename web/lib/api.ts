@@ -11,7 +11,6 @@ export type CallSummary = {
   source: string;
   duration_s: number | null;
   recorded_at: string;
-  intent: string | null;
   run_status: RunStatus;
 };
 
@@ -24,6 +23,10 @@ export type Stage = {
   dropped_claims?: number;
 };
 
+// Still used by `ShareSnapshot` below (the /packs + /share features, out of
+// scope for this task) even though `Insights`/`ComplianceFinding` — the other
+// two shapes that used to live here — are fully dead now that Task 9 removed
+// their backing endpoints and this task's `CallDetail` moves to `agent_runs`.
 export type ScorecardField = {
   name: string;
   kind: "deterministic" | "judgment";
@@ -34,21 +37,15 @@ export type ScorecardField = {
   evidence: Evidence[];
 };
 
-export type ComplianceFinding = {
-  rule: string;
-  severity: string;
-  detail: string;
-  evidence: Evidence[];
-};
-
-export type Insights = {
-  intent: { value: string; confidence: number; evidence: Evidence[] };
-  summary: { text: string; evidence: Evidence[] }[];
-  objections: { label: string; detail: string; status?: string; evidence: Evidence[] }[];
-  next_steps: { text: string; owner?: string; evidence: Evidence[] }[];
-  follow_up_email: { subject: string; body: string } | null;
-  scorecard: { pack: string; pack_version: number; fields: ScorecardField[] };
-  dropped_claims?: { where: string; reason: string }[];
+export type AgentRunSummary = {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  status: "pending" | "shipped" | "partial" | "failed";
+  steps: { name: string; status: string; attempts: number; cost_usd: number; error: string | null }[];
+  output: Record<string, Record<string, unknown>> | null;
+  edited: boolean;
+  cost_usd: number;
 };
 
 export type CallDetail = {
@@ -60,10 +57,9 @@ export type CallDetail = {
     recorded_at: string;
     participants: string[];
   };
-  run: { status: RunStatus; stages: Stage[]; edited: boolean };
+  run: { status: RunStatus; stages: Stage[]; orchestrator_reasoning: string | null };
   transcript: { language: string; lines: { line: number; speaker: string; text: string }[] } | null;
-  insights: Insights | null;
-  compliance: { verdict: string; audit_hash: string; source: string; findings: ComplianceFinding[] } | null;
+  agent_runs: AgentRunSummary[];
 };
 
 async function j<T>(res: Response): Promise<T> {
@@ -105,16 +101,6 @@ export const ingestUrl = (url: string) =>
 
 export const retryCall = (id: string) =>
   fetch(`${API_BASE}/api/calls/${id}/retry`, { method: "POST" }).then(j);
-
-export const saveInsights = (id: string, insights: Insights) =>
-  fetch(`${API_BASE}/api/calls/${id}/insights`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ insights }),
-  }).then(j);
-
-export const resetInsights = (id: string) =>
-  fetch(`${API_BASE}/api/calls/${id}/insights/reset`, { method: "POST" }).then(j);
 
 export const createShare = (id: string) =>
   fetch(`${API_BASE}/api/calls/${id}/share`, { method: "POST" }).then(
@@ -169,3 +155,66 @@ export const deactivatePacks = () =>
 export const exportMarkdownUrl = (id: string, transcript = false) =>
   `${API_BASE}/api/calls/${id}/export.md${transcript ? "?transcript=true" : ""}`;
 export const exportJsonUrl = (id: string) => `${API_BASE}/api/calls/${id}/export.json`;
+
+export type Skill = {
+  id: string;
+  name: string;
+  description: string;
+  when_to_use: string;
+  body_md: string;
+  fields: { checks?: string[]; scores?: { name: string; max: number }[]; claims?: string[] } | null;
+  source: "ui" | "upload";
+  version: number;
+};
+
+export type Agent = {
+  id: string;
+  name: string;
+  description: string;
+  system_prompt: string;
+  enabled: boolean;
+  skills?: { id: string; name: string }[];
+};
+
+export const listAgents = () => fetch(`${API_BASE}/api/agents`, { cache: "no-store" }).then(j<Agent[]>);
+export const getAgent = (id: string) => fetch(`${API_BASE}/api/agents/${id}`, { cache: "no-store" }).then(j<Agent>);
+export const createAgent = (body: { name: string; description: string; system_prompt: string }) =>
+  fetch(`${API_BASE}/api/agents`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(j<Agent>);
+export const updateAgent = (id: string, body: Partial<{ name: string; description: string; system_prompt: string; enabled: boolean }>) =>
+  fetch(`${API_BASE}/api/agents/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(j<Agent>);
+export const deleteAgent = (id: string) => fetch(`${API_BASE}/api/agents/${id}`, { method: "DELETE" }).then(j);
+export const attachSkill = (agentId: string, skillId: string) =>
+  fetch(`${API_BASE}/api/agents/${agentId}/skills`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ skill_id: skillId }),
+  }).then(j);
+export const detachSkill = (agentId: string, skillId: string) =>
+  fetch(`${API_BASE}/api/agents/${agentId}/skills/${skillId}`, { method: "DELETE" }).then(j);
+
+export const listSkills = () => fetch(`${API_BASE}/api/skills`, { cache: "no-store" }).then(j<Skill[]>);
+export const createSkill = (body: { name: string; description: string; when_to_use: string; body_md: string; fields: Skill["fields"] }) =>
+  fetch(`${API_BASE}/api/skills`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(j<Skill>);
+export const updateSkill = (id: string, body: Partial<{ name: string; description: string; when_to_use: string; body_md: string; fields: Skill["fields"] }>) =>
+  fetch(`${API_BASE}/api/skills/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(j<Skill>);
+export const deleteSkill = (id: string) => fetch(`${API_BASE}/api/skills/${id}`, { method: "DELETE" }).then(j);
+export const uploadSkill = (file: File) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return fetch(`${API_BASE}/api/skills/upload`, { method: "POST", body: fd }).then(j<Skill>);
+};
+
+export const editAgentRunOutput = (callId: string, agentRunId: string, output: Record<string, unknown>) =>
+  fetch(`${API_BASE}/api/calls/${callId}/agent-runs/${agentRunId}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ output }),
+  }).then(j<{ ok: boolean; edited: boolean }>);
+export const resetAgentRunOutput = (callId: string, agentRunId: string) =>
+  fetch(`${API_BASE}/api/calls/${callId}/agent-runs/${agentRunId}/reset`, { method: "POST" }).then(
+    j<{ ok: boolean; edited: boolean }>,
+  );

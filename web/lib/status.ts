@@ -34,10 +34,9 @@ export const tonePill: Record<UiStatus["tone"], string> = {
 // Human labels for the internal pipeline stages (shown only in "details").
 export const stageLabels: Record<string, string> = {
   transcribe: "Transcribe",
-  detect_intent: "Detect call type",
-  extract: "Extract insights",
-  validate: "Verify evidence",
-  score: "Score",
-  compliance: "Compliance check",
-  compose_email: "Draft email",
+  "summary-and-next-steps": "Summary & next steps",
+  "sales-scorecard": "Sales scorecard",
+  "support-scorecard": "Support scorecard",
+  "compliance-check": "Compliance check",
+  "follow-up-email": "Follow-up email",
 };

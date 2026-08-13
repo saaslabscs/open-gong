@@ -11,7 +11,6 @@ import {
   type Status,
 } from "@/lib/api";
 import { humanizeStatus, tonePill } from "@/lib/status";
-import Header from "@/components/Header";
 
 function formatDuration(s: number | null) {
   return s == null ? "" : `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -55,7 +54,6 @@ export default function Home() {
 
   return (
     <>
-      <Header />
       <main className="mx-auto max-w-3xl px-6 py-10">
         {status && !status.can_process_uploads && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -123,7 +121,6 @@ export default function Home() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{c.title}</div>
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                      {c.intent && <span className="capitalize">{c.intent} call</span>}
                       {c.duration_s != null && <span>· {formatDuration(c.duration_s)}</span>}
                       <span>· {new Date(c.recorded_at).toLocaleDateString()}</span>
                     </div>

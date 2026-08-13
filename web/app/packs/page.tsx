@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { listPacks, compilePack, activatePack, deactivatePacks, type Pack } from "@/lib/api";
-import Header from "@/components/Header";
 
 const EXAMPLES = [
   "We're a B2B sales team. Score against MEDDIC, track competitor mentions and deal size, and flag if the prospect raises security or compliance concerns.",
@@ -40,7 +39,6 @@ export default function PacksPage() {
 
   return (
     <>
-      <Header />
       <main className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Insight packs</h1>
       <p className="mt-1 text-sm text-neutral-500">
