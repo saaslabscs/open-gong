@@ -15,10 +15,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from . import pipeline  # noqa: F401 — registers job handlers
+from .api.agents import router as agents_router
 from .api.ingest import router as ingest_router
 from .api.packs import router as packs_router
 from .api.review import router as review_router
 from .api.share import router as share_router
+from .api.skills import router as skills_router
 from .api.webhooks import router as webhooks_router
 from .db import Base, engine, get_session
 from .jobs import worker_loop
@@ -53,11 +55,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(agents_router)
 app.include_router(ingest_router)
 app.include_router(webhooks_router)
 app.include_router(review_router)
 app.include_router(share_router)
 app.include_router(packs_router)
+app.include_router(skills_router)
 
 
 @app.get("/healthz")
