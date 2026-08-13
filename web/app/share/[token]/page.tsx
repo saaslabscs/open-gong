@@ -1,5 +1,12 @@
-import { getShare, type ShareSnapshot } from "@/lib/api";
+import { getShare, type Evidence, type ShareSnapshot, type SharedAgentRun } from "@/lib/api";
+import { renderScalarField, type ClaimItem } from "@/lib/skillOutput";
 import { notFound } from "next/navigation";
+
+// The snapshot is a frozen list of per-agent, per-skill outputs (see
+// backend/app/render.py::share_snapshot) — the same shape the call detail view
+// renders, minus ids/steps/cost. Fields are dispatched by shape, not by name,
+// via the shared `renderScalarField`. Evidence is shown as a static tooltip:
+// there is no transcript on a public share page to jump to.
 
 export default async function SharePage(props: PageProps<"/share/[token]">) {
   const { token } = await props.params;
@@ -10,66 +17,23 @@ export default async function SharePage(props: PageProps<"/share/[token]">) {
     notFound();
   }
 
+  const agentRuns = (snap.agent_runs ?? []).filter(
+    (ar) => Object.keys(ar.output ?? {}).length > 0,
+  );
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <div className="mb-6 border-b border-neutral-200 pb-4">
         <h1 className="text-2xl font-semibold tracking-tight">{snap.title}</h1>
         <p className="mt-1 text-xs text-neutral-500">
-          {new Date(snap.recorded_at).toLocaleDateString()}
-          {snap.intent && ` · ${snap.intent}`} · shared via Open Gong
+          {new Date(snap.recorded_at).toLocaleDateString()} · shared via Open Gong
         </p>
       </div>
 
-      {snap.summary.length > 0 && (
-        <Block title="Summary">
-          <ul className="list-disc space-y-1.5 pl-5 text-sm">
-            {snap.summary.map((s, i) => <li key={i}>{s.text}</li>)}
-          </ul>
-        </Block>
-      )}
-
-      {snap.objections.length > 0 && (
-        <Block title="Objections & concerns">
-          <ul className="space-y-1.5 text-sm">
-            {snap.objections.map((o, i) => (
-              <li key={i}><span className="font-medium">{o.label}</span>: {o.detail}</li>
-            ))}
-          </ul>
-        </Block>
-      )}
-
-      {snap.next_steps.length > 0 && (
-        <Block title="Next steps">
-          <ul className="list-disc space-y-1.5 pl-5 text-sm">
-            {snap.next_steps.map((n, i) => (
-              <li key={i}>{n.text}{n.owner && <span className="text-neutral-500"> — {n.owner}</span>}</li>
-            ))}
-          </ul>
-        </Block>
-      )}
-
-      {snap.scorecard && snap.scorecard.fields.length > 0 && (
-        <Block title="Scorecard">
-          <ul className="space-y-1 text-sm">
-            {snap.scorecard.fields.map((f) => (
-              <li key={f.name}>
-                <span className="font-medium">{f.name.replaceAll("_", " ")}</span>:{" "}
-                {f.kind === "deterministic"
-                  ? f.value ? "yes" : f.value === false ? "no" : "—"
-                  : `${f.score}/${f.max_score}`}
-              </li>
-            ))}
-          </ul>
-        </Block>
-      )}
-
-      {snap.follow_up_email && (
-        <Block title="Follow-up email">
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm">
-            <p className="font-medium">{snap.follow_up_email.subject}</p>
-            <p className="mt-2 whitespace-pre-wrap text-neutral-700">{snap.follow_up_email.body}</p>
-          </div>
-        </Block>
+      {agentRuns.length === 0 ? (
+        <p className="text-sm text-neutral-500">No notes were shared for this call.</p>
+      ) : (
+        agentRuns.map((ar, i) => <AgentRunBlock key={`${ar.agent_name}-${i}`} agentRun={ar} />)
       )}
 
       <p className="mt-10 text-center text-xs text-neutral-400">
@@ -79,11 +43,60 @@ export default async function SharePage(props: PageProps<"/share/[token]">) {
   );
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function AgentRunBlock({ agentRun }: { agentRun: SharedAgentRun }) {
   return (
-    <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">{title}</h2>
-      {children}
+    <section className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        {agentRun.agent_name}
+        {agentRun.edited && (
+          <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[11px] normal-case tracking-normal text-purple-700">
+            edited by a human
+          </span>
+        )}
+      </h2>
+      <div className="space-y-3">
+        {Object.entries(agentRun.output ?? {}).map(([skillName, fields]) => (
+          <SkillOutput key={skillName} skillName={skillName} fields={fields} />
+        ))}
+      </div>
     </section>
+  );
+}
+
+function Cite({ evidence }: { evidence: Evidence[] }) {
+  if (!evidence?.length) return null;
+  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
+  return (
+    <span className="cite cursor-help" title={title}>
+      ❝ proof{evidence.length > 1 ? ` ·${evidence.length}` : ""}
+    </span>
+  );
+}
+
+function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<string, unknown> }) {
+  return (
+    <div className="card">
+      <div className="eyebrow">{skillName.replaceAll("-", " ")}</div>
+      <ul className="mt-2 space-y-2 text-sm leading-relaxed">
+        {Object.entries(fields ?? {}).map(([name, value]) => {
+          if (Array.isArray(value)) {
+            const items = value as ClaimItem[];
+            if (items.length === 0)
+              return <li key={name} className="text-neutral-400">{name.replaceAll("_", " ")}: none</li>;
+            return items.map((item, i) => (
+              <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} /></li>
+            ));
+          }
+          const rendered = renderScalarField(value);
+          return (
+            <li key={name} className="flex items-center gap-2">
+              <span className="capitalize text-neutral-700">{name.replaceAll("_", " ")}:</span>
+              <span className="font-medium">{rendered.text}</span>
+              <Cite evidence={rendered.evidence} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

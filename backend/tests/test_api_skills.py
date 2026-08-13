@@ -1,8 +1,11 @@
 """Skill CRUD + upload API (Task 10 of the agent-skill architecture plan)."""
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from app.db import get_session
 from app.main import app
+from app.models import AgentSkill
 
 client = TestClient(app)
 
@@ -44,6 +47,27 @@ def test_delete_skill():
     }).json()
     assert client.delete(f"/api/skills/{created['id']}").status_code == 200
     assert client.get(f"/api/skills/{created['id']}").status_code == 404
+
+
+def test_delete_skill_removes_agent_attachments():
+    """Deleting a skill must take its AgentSkill links with it. Left behind
+    they are dangling FK rows — invisible on SQLite, an IntegrityError on
+    Postgres — and the owning agent would still count a skill it can't
+    resolve."""
+    agent = client.post("/api/agents", json={"name": "a", "description": "d", "system_prompt": "p"}).json()
+    skill = client.post("/api/skills", json={
+        "name": "s", "description": "d", "when_to_use": "w", "body_md": "b", "fields": None,
+    }).json()
+    client.post(f"/api/agents/{agent['id']}/skills", json={"skill_id": skill["id"]})
+    assert client.get(f"/api/agents/{agent['id']}").json()["skills"][0]["id"] == skill["id"]
+
+    assert client.delete(f"/api/skills/{skill['id']}").status_code == 200
+
+    fetched = client.get(f"/api/agents/{agent['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["skills"] == []
+    with get_session() as session:  # no orphan link left behind
+        assert session.scalars(select(AgentSkill).where(AgentSkill.skill_id == skill["id"])).all() == []
 
 
 def test_upload_skill_from_md_file():

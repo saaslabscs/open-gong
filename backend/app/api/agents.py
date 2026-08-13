@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..db import get_session
-from ..models import Agent, AgentSkill, Skill
+from ..models import Agent, AgentSkill, EntryRule, Skill
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -94,6 +94,13 @@ def delete_agent(agent_id: str) -> dict:
             raise HTTPException(404, "agent not found")
         for link in session.scalars(select(AgentSkill).where(AgentSkill.agent_id == agent_id)).all():
             session.delete(link)
+        # Same defensive cleanup for entry rules pinned to this agent — the FK
+        # is real even though nothing creates EntryRules through the UI yet.
+        # AgentRun rows are deliberately left alone: historical results outlive
+        # the agent config that produced them (main.get_call already renders
+        # them as "Unknown agent").
+        for rule in session.scalars(select(EntryRule).where(EntryRule.agent_id == agent_id)).all():
+            session.delete(rule)
         session.delete(agent)
         session.commit()
         return {"ok": True}

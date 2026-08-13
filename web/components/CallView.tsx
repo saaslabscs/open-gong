@@ -15,6 +15,7 @@ import {
   type AgentRunSummary,
 } from "@/lib/api";
 import { humanizeStatus, tonePill, stageLabels } from "@/lib/status";
+import { renderScalarField, type ClaimItem } from "@/lib/skillOutput";
 
 function jumpTo(line: number) {
   const el = document.getElementById(`line-${line}`);
@@ -35,18 +36,6 @@ function Cite({ evidence }: { evidence: Evidence[] }) {
   );
 }
 
-function renderScalarField(value: unknown): { text: string; evidence: Evidence[] } {
-  if (value && typeof value === "object" && "score" in (value as Record<string, unknown>)) {
-    const v = value as { score: number; justification?: string; evidence: Evidence[] };
-    return { text: `${v.score} — ${v.justification ?? ""}`, evidence: v.evidence ?? [] };
-  }
-  if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
-    const v = value as { value: boolean | null; evidence: Evidence[] };
-    return { text: v.value ? "yes" : v.value === false ? "no" : "—", evidence: v.evidence ?? [] };
-  }
-  return { text: String(value ?? ""), evidence: [] };
-}
-
 function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<string, unknown> }) {
   return (
     <div className="card">
@@ -54,7 +43,7 @@ function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<
       <ul className="mt-2 space-y-2 text-sm leading-relaxed">
         {Object.entries(fields).map(([name, value]) => {
           if (Array.isArray(value)) {
-            const items = value as { text: string; evidence: Evidence[] }[];
+            const items = value as ClaimItem[];
             if (items.length === 0) return <li key={name} className="text-neutral-400">{name.replaceAll("_", " ")}: none</li>;
             return items.map((item, i) => (
               <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} /></li>
@@ -171,7 +160,12 @@ export default function CallView({ id }: { id: string }) {
   const { call, run, transcript, agent_runs } = data;
   const st = humanizeStatus(run.status);
 
-  if (!transcript || agent_runs.length === 0) {
+  // "Still working" is a property of the run's status, not of how many agent
+  // runs exist yet. A run that legitimately shipped with zero dispatched
+  // agents is terminal — the poll below never re-fires for it, so showing a
+  // spinner there would be a permanent lie. (No transcript still means
+  // transcription is in flight, which genuinely is progress.)
+  if (!transcript || run.status === "running" || run.status === "pending") {
     return (
       <Shell>
         <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
@@ -179,6 +173,37 @@ export default function CallView({ id }: { id: string }) {
           <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
           {transcript ? "Writing the notes…" : "Transcribing the call…"} This updates on its own.
         </div>
+      </Shell>
+    );
+  }
+
+  // Terminal, but the orchestrator picked no agents — a valid outcome, not an
+  // error and not progress. Say so, and show why.
+  if (agent_runs.length === 0) {
+    return (
+      <Shell>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
+            <p className="mt-1 text-xs text-neutral-500">
+              {call.participants.join(", ")} · {new Date(call.recorded_at).toLocaleDateString()}
+            </p>
+          </div>
+          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${tonePill[st.tone]}`}>
+            {st.label}
+          </span>
+        </div>
+        <p className="mt-6 text-sm text-neutral-600">
+          {run.status === "failed"
+            ? "This call finished without any agent notes."
+            : "No agents matched this call, so there are no notes to show."}
+        </p>
+        {run.orchestrator_reasoning && (
+          <p className="mt-3 text-xs text-neutral-400">Why no agents ran: {run.orchestrator_reasoning}</p>
+        )}
+        {(run.status === "failed" || run.status === "partial") && (
+          <button onClick={doRetry} disabled={busy} className="btn btn-warn mt-4">Retry</button>
+        )}
       </Shell>
     );
   }

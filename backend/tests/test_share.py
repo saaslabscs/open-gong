@@ -132,6 +132,11 @@ def test_share_link_freezes_snapshot_and_excludes_transcript():
         c.patch(f"/api/calls/{call_id}/agent-runs/{agent_run_id}", json={"output": edited})
 
         snap = c.get(f"/api/share/{token}").json()["snapshot"]
+        # The public /share/[token] page types and renders exactly this shape
+        # (web/lib/api.ts: ShareSnapshot / SharedAgentRun) — a silent change
+        # here breaks that page at runtime, not at build time.
+        assert set(snap) == {"title", "recorded_at", "duration_s", "agent_runs"}
+        assert set(snap["agent_runs"][0]) == {"agent_name", "output", "edited"}
         frozen_summary = snap["agent_runs"][0]["output"]["summary-and-next-steps"]["summary"]
         assert frozen_summary[0]["text"] == "Bob was double-charged."  # frozen
         assert "transcript" not in snap

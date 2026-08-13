@@ -223,6 +223,48 @@ def test_retry_rerun_does_not_duplicate_agent_runs(monkeypatch):
         assert run.status == "shipped"
 
 
+def test_retry_preserves_human_edited_output(monkeypatch):
+    """Clearing the prior attempt's AgentRuns (above) must not silently throw
+    away output a human already reviewed and edited. The edit is captured by
+    agent_id before the wipe and re-attached to that agent's fresh AgentRun,
+    while the AI's own `output` is genuinely re-generated."""
+    call_id, agent_ids, skill_ids = _seed(["Call Summarizer"], {"Call Summarizer": ["plain-summary"]})
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: ([agent_ids["Call Summarizer"]], "Only summarizer needed.", 0.002),
+    )
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([skill_ids["plain-summary"]], "Always run.", 0.002),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A clean call."}, [], 0.01),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    human_edit = {"plain-summary": {"summary_text": "A human rewrote this before the retry."}}
+    with get_session() as session:
+        agent_run = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).one()
+        original_agent_run_id = agent_run.id
+        agent_run.edited_output = human_edit
+        session.commit()
+
+    run_insights({"call_id": call_id})  # retry re-enters the same run_id
+
+    with get_session() as session:
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()
+        assert len(agent_runs) == 1
+        ar = agent_runs[0]
+        assert ar.id != original_agent_run_id  # a genuinely fresh row, not the old one left in place
+        assert ar.output == {"plain-summary": {"summary_text": "A clean call."}}  # AI output re-ran
+        assert ar.edited_output == human_edit  # ...and the human's edit survived it
+
+
 def test_dispatch_raising_finalizes_run_as_failed_not_stuck_running(monkeypatch):
     """An unexpected exception from orchestrator dispatch (e.g. malformed LLM
     JSON) must still leave the Run terminal, never stuck "running" — which

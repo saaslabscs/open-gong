@@ -209,11 +209,22 @@ def run_insights(payload: dict) -> None:
         # accumulate: doubled exports, a stale "failed" row that keeps the
         # aggregate status stuck "partial" forever even after a clean retry,
         # and double-counted cost. See Task 9 review finding #1.
+        #
+        # But human edits must survive a retry: before this delete existed,
+        # retry never touched edited_output at all. Carry each agent's edit
+        # forward by agent_id so it can be re-attached to that agent's fresh
+        # AgentRun below. An agent that isn't dispatched again simply has
+        # nowhere to land its edit — that's accepted.
+        preserved_edits = {
+            ar.agent_id: ar.edited_output
+            for ar in session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()
+            if ar.edited_output is not None
+        }
         session.execute(delete(AgentRun).where(AgentRun.run_id == run_id))
         session.commit()
 
     try:
-        _dispatch_and_run(call_id, run_id)
+        _dispatch_and_run(call_id, run_id, preserved_edits)
     except Exception as e:  # noqa: BLE001 — reason recorded on the Run, not swallowed
         # An unexpected failure anywhere in dispatch/routing/execution (e.g.
         # malformed LLM JSON the orchestrator itself doesn't guard against)
@@ -233,7 +244,7 @@ def run_insights(payload: dict) -> None:
                 session.commit()
 
 
-def _dispatch_and_run(call_id: str, run_id: str) -> None:
+def _dispatch_and_run(call_id: str, run_id: str, preserved_edits: dict[str, dict] | None = None) -> None:
     with get_session() as session:
         call = session.get(Call, call_id)
         run = session.get(Run, run_id)
@@ -293,6 +304,11 @@ def _dispatch_and_run(call_id: str, run_id: str) -> None:
     with get_session() as session:
         run = session.get(Run, run_id)
         agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()
+        # Re-attach any human edit captured before the pre-dispatch wipe, so a
+        # retry re-runs the AI without silently discarding reviewed output.
+        for ar in agent_runs:
+            if preserved_edits and ar.agent_id in preserved_edits:
+                ar.edited_output = preserved_edits[ar.agent_id]
         run.status = _aggregate_status([ar.status for ar in agent_runs])
         run.cost_usd = round(run.cost_usd + sum(ar.cost_usd for ar in agent_runs), 4)
         if budget_note:

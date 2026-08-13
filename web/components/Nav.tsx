@@ -11,6 +11,9 @@ const ITEMS = [
 
 export default function Nav() {
   const pathname = usePathname();
+  // /share/[token] is a public, unauthenticated page for people outside the
+  // team — internal navigation has no place on it.
+  if (pathname.startsWith("/share")) return null;
   return (
     <nav className="flex h-screen w-56 shrink-0 flex-col border-r border-neutral-200 px-4 py-5">
       <Link href="/" className="mb-6 flex items-center gap-2 px-2">

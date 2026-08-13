@@ -23,20 +23,6 @@ export type Stage = {
   dropped_claims?: number;
 };
 
-// Still used by `ShareSnapshot` below (the /packs + /share features, out of
-// scope for this task) even though `Insights`/`ComplianceFinding` — the other
-// two shapes that used to live here — are fully dead now that Task 9 removed
-// their backing endpoints and this task's `CallDetail` moves to `agent_runs`.
-export type ScorecardField = {
-  name: string;
-  kind: "deterministic" | "judgment";
-  value?: boolean | null;
-  score?: number;
-  max_score?: number;
-  justification?: string;
-  evidence: Evidence[];
-};
-
 export type AgentRunSummary = {
   id: string;
   agent_id: string;
@@ -112,16 +98,21 @@ export const getShare = (token: string) =>
     j<{ snapshot: ShareSnapshot; created_at: string }>,
   );
 
+// A share snapshot is a reduced view of the call's AgentRuns, frozen at share
+// time by `render.share_snapshot` — no ids, no per-step detail, no cost, no
+// transcript, and never any compliance-check output. `output` is the same
+// per-skill shape as `AgentRunSummary["output"]`: skill name -> field dict.
+export type SharedAgentRun = {
+  agent_name: string;
+  output: Record<string, Record<string, unknown>>;
+  edited: boolean;
+};
+
 export type ShareSnapshot = {
   title: string;
   recorded_at: string;
   duration_s: number | null;
-  intent: string | null;
-  summary: { text: string; evidence: Evidence[] }[];
-  objections: { label: string; detail: string; status?: string; evidence: Evidence[] }[];
-  next_steps: { text: string; owner?: string; evidence: Evidence[] }[];
-  scorecard: { pack: string; fields: ScorecardField[] } | null;
-  follow_up_email: { subject: string; body: string } | null;
+  agent_runs: SharedAgentRun[];
 };
 
 export type Pack = {

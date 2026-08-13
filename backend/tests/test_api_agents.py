@@ -1,8 +1,11 @@
 """Agent CRUD API (Task 10 of the agent-skill architecture plan)."""
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from app.db import get_session
 from app.main import app
+from app.models import EntryRule
 
 client = TestClient(app)
 
@@ -37,6 +40,21 @@ def test_delete_agent():
     resp = client.delete(f"/api/agents/{created['id']}")
     assert resp.status_code == 200
     assert client.get(f"/api/agents/{created['id']}").status_code == 404
+
+
+def test_delete_agent_removes_entry_rules():
+    """An EntryRule pinned to the agent is a real FK. Nothing creates entry
+    rules through the UI yet, so this is inserted directly — deleting the
+    agent must clear the rule rather than leaving a row pointing at a missing
+    agent (which would 500 on Postgres and mis-route dispatch on SQLite)."""
+    agent = client.post("/api/agents", json={"name": "a", "description": "d", "system_prompt": "p"}).json()
+    with get_session() as session:
+        session.add(EntryRule(match_kind="source", match_value="upload", agent_id=agent["id"]))
+        session.commit()
+
+    assert client.delete(f"/api/agents/{agent['id']}").status_code == 200
+    with get_session() as session:
+        assert session.scalars(select(EntryRule).where(EntryRule.agent_id == agent["id"])).all() == []
 
 
 def test_attach_and_detach_skill():

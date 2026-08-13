@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..db import get_session
-from ..models import Skill
+from ..models import AgentSkill, Skill
 from ..skills.loader import SkillParseError, parse_skill_md
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
@@ -91,6 +91,12 @@ def delete_skill(skill_id: str) -> dict:
         skill = session.get(Skill, skill_id)
         if skill is None:
             raise HTTPException(404, "skill not found")
+        # Drop the agent attachments first — left behind they are dangling FK
+        # rows (silent orphans on SQLite, an IntegrityError on Postgres) that
+        # would also make every attached agent's skill list unresolvable.
+        # Mirrors delete_agent's cleanup in api/agents.py.
+        for link in session.scalars(select(AgentSkill).where(AgentSkill.skill_id == skill_id)).all():
+            session.delete(link)
         session.delete(skill)
         session.commit()
         return {"ok": True}
