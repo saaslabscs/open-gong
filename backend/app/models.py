@@ -94,3 +94,74 @@ class ShareLink(Base):
     content_snapshot: Mapped[dict] = mapped_column(JSON)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Agent(Base):
+    __tablename__ = "agents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str] = mapped_column(Text)  # what the orchestrator sees
+    system_prompt: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str] = mapped_column(Text)
+    when_to_use: Mapped[str] = mapped_column(Text)
+    body_md: Mapped[str] = mapped_column(Text)
+    # {"checks": [...], "scores": [{"name","max"}], "claims": [...]} or None (narrative-only)
+    fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String)  # ui | upload
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AgentSkill(Base):
+    __tablename__ = "agent_skills"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id"))
+
+
+class Orchestrator(Base):
+    __tablename__ = "orchestrators"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    system_prompt: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"))
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"))
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
+    # P3 seam — unset and unread until agent-to-agent invocation (P3) lands
+    parent_agent_run_id: Mapped[str | None] = mapped_column(ForeignKey("agent_runs.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending | shipped | partial | failed
+    # [{"name","status","attempts","cost_usd","error","dropped_claims"}] — one per skill run
+    steps: Mapped[list] = mapped_column(JSON, default=list)
+    output: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # immutable AI output, keyed by skill name
+    edited_output: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # human review edits
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EntryRule(Base):
+    __tablename__ = "entry_rules"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    match_kind: Mapped[str] = mapped_column(String)  # phone_line | source
+    match_value: Mapped[str] = mapped_column(String)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
