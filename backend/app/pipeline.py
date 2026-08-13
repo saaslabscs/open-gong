@@ -3,49 +3,36 @@
 `process_call`: submit audio to PyAI (mock by default); transcript returns via
 the signed webhook, which enqueues `run_insights`.
 
-`run_insights`: the insight chain inside the run-state harness —
-detect_intent → extract → validate (evidence gate) → score → compose_email.
-Every run finishes shipped | partial | failed, with reasons and costs on each
-stage and the budget cap enforced.
+`run_insights`: orchestrator dispatch -> per-agent AgentRun -> skill router ->
+skill execution. Every AgentRun finishes shipped | partial | failed, and the
+call's Run status aggregates across all its AgentRuns. See
+docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, §5.
 """
 
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from . import orchestrator as orchestrator_mod
+from . import skill_router as skill_router_mod
 from .adapters.pyai.base import get_adapter
+from .agent_runtime import new_agent_run_state
 from .db import get_session
-from .compliance import run_compliance_check
-from .evidence import validate_extraction
-from .insights import compose_email, detect_intent, extract, prettify_transcript, score
+from .entry_rules import resolve_entry_rule
+from .insights import prettify_transcript
 from .jobs import enqueue, handler
-from .models import Call, Run
-from .packs import BUILTIN_PACKS
-from .run_state import BudgetExceeded, RunState, StageFailed
+from .models import Agent, AgentRun, AgentSkill, Call, Orchestrator, Run, Skill
+from .run_state import BudgetExceeded, StageFailed, max_cost_per_run
+from .skills import executor as executor_mod
 from .transcription import deliver_transcript, update_transcript_lines
 
-# how long to wait between polls of a PyAI transcription job (seconds)
+# Module-qualified references (not `from .orchestrator import dispatch`) so
+# tests can monkeypatch orchestrator.dispatch / skill_router.route_skills /
+# skills.executor.run_skill per-test — a plain `from X import Y` would bind
+# the function once at pipeline's first import and never see later patches.
+
 POLL_INTERVAL_S = 5
-MAX_POLLS = 120  # ~10 min ceiling before giving up
-
-
-def select_pack(intent: str | None) -> dict:
-    """An active custom pack (compiled from prose) wins over the built-in
-    sales/support pack for the detected intent."""
-    from .models import InsightPack
-
-    with get_session() as session:
-        active = session.scalars(
-            select(InsightPack).where(InsightPack.status == "active").order_by(InsightPack.created_at.desc())
-        ).first()
-        if active:
-            return {
-                "name": active.name,
-                "version": active.version,
-                "json_schema": active.json_schema,
-                "scoring_spec": active.scoring_spec,
-            }
-    return BUILTIN_PACKS.get(intent, BUILTIN_PACKS["sales"])
+MAX_POLLS = 120
 
 
 def _update_stage(run: Run, name: str, **updates) -> None:
@@ -119,6 +106,70 @@ def _fail_transcribe(call_id: str, reason: str) -> None:
         session.commit()
 
 
+def _agent_dict(agent: Agent) -> dict:
+    return {"id": agent.id, "name": agent.name, "description": agent.description}
+
+
+def _skill_dict(skill: Skill) -> dict:
+    return {
+        "id": skill.id, "name": skill.name, "description": skill.description,
+        "when_to_use": skill.when_to_use, "body_md": skill.body_md, "fields": skill.fields,
+    }
+
+
+def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str, lines: list[dict]) -> None:
+    with get_session() as session:
+        agent_run = AgentRun(call_id=call_id, run_id=run_id, agent_id=agent.id, status="running", steps=[])
+        session.add(agent_run)
+        session.commit()
+        agent_run_id = agent_run.id
+
+    skill_ids, router_reasoning, router_cost = skill_router_mod.route_skills(
+        lines, agent.system_prompt, [_skill_dict(s) for s in skills]
+    )
+    routed_skills = [s for s in skills if s.id in skill_ids]
+
+    rs = new_agent_run_state([s.name for s in routed_skills])
+    output: dict = {}
+    total_cost = router_cost
+
+    for skill in routed_skills:
+        def run_one(sk=skill):
+            cleaned, dropped, cost = executor_mod.run_skill(_skill_dict(sk), lines)
+            rs.charge(sk.name, cost)
+            rs._get(sk.name).dropped_claims = len(dropped)
+            return cleaned
+
+        try:
+            output[skill.name] = rs.execute(skill.name, run_one)
+        except BudgetExceeded:
+            rs.skip_remaining(skill.name)
+            break
+        except StageFailed:
+            continue
+
+    total_cost += sum(s.cost_usd for s in rs.steps)
+
+    with get_session() as session:
+        agent_run = session.get(AgentRun, agent_run_id)
+        agent_run.steps = rs.as_dicts()
+        agent_run.status = rs.final_status()
+        agent_run.output = output or None
+        agent_run.cost_usd = round(total_cost, 4)
+        agent_run.finished_at = datetime.now(timezone.utc)
+        session.commit()
+
+
+def _aggregate_status(statuses: list[str]) -> str:
+    if not statuses:
+        return "shipped"
+    if all(s == "shipped" for s in statuses):
+        return "shipped"
+    if all(s == "failed" for s in statuses):
+        return "failed"
+    return "partial"
+
+
 @handler("run_insights")
 def run_insights(payload: dict) -> None:
     call_id = payload["call_id"]
@@ -126,111 +177,69 @@ def run_insights(payload: dict) -> None:
         call = session.get(Call, call_id)
         if call is None or call.transcript is None:
             raise ValueError(f"call {call_id} has no transcript")
-        run = session.scalars(
-            select(Run).where(Run.call_id == call_id).order_by(Run.created_at.desc())
-        ).first()
+        run = session.scalars(select(Run).where(Run.call_id == call_id).order_by(Run.created_at.desc())).first()
         lines = call.transcript.lines
         run_id = run.id
 
-    rs = RunState()
-    rs._get("transcribe").status = "ok"  # done upstream via webhook
-    rs._get("transcribe").attempts = 1
-
-    # Prettify raw STT for readability (non-fatal, skips already-clean text).
-    # Runs before insights so the cleaned text is what quotes cite and the UI
-    # shows. Its cost folds into the transcribe stage.
-    try:
-        pretty, fmt_cost = prettify_transcript(lines)
-        if pretty is not lines:
-            update_transcript_lines(call_id, pretty)
-            lines = pretty
-        rs._get("transcribe").cost_usd += fmt_cost
-    except Exception:
-        pass  # keep raw lines
-
-    insights: dict = {}
-
-    def staged(stage_name: str, fn):
-        """Run an LLM step; record its cost against the budget."""
-
-        def wrapped():
-            result, cost = fn()
-            rs.charge(stage_name, cost)
-            return result
-
-        return rs.execute(stage_name, wrapped)
-
-    try:
-        # 1. intent → pack; on failure fall back to the sales pack rather than
-        # killing the run (intent only picks which pack to use)
         try:
-            intent = staged("detect_intent", lambda: detect_intent(lines))
-        except StageFailed:
-            intent = {"value": "sales", "confidence": 0.0, "evidence": [], "fallback": True}
-        insights["intent"] = intent
-        pack = select_pack(intent.get("value"))
+            pretty, fmt_cost = prettify_transcript(lines)
+            if pretty is not lines:
+                update_transcript_lines(call_id, pretty)
+                lines = pretty
+        except Exception:
+            fmt_cost = 0.0
 
-        # 2. extraction
-        raw_extraction = staged("extract", lambda: extract(lines, pack))
+        entry_agent_id = resolve_entry_rule(session, call)
+        enabled_agents = session.scalars(select(Agent).where(Agent.enabled.is_(True))).all()
 
-        # 3. evidence gate — pure code, no LLM, cannot be skipped
-        cleaned, dropped = rs.execute(
-            "validate", lambda: validate_extraction(raw_extraction, lines)
-        )
-        rs._get("validate").dropped_claims = len(dropped)
-        insights["summary"] = cleaned.get("summary", [])
-        insights["objections"] = cleaned.get("objections", [])
-        insights["next_steps"] = cleaned.get("next_steps", [])
-        insights["dropped_claims"] = dropped
-
-        # 4. scorecard (deterministic in code + one judgment LLM call)
-        insights["scorecard"] = staged("score", lambda: score(lines, pack, cleaned))
-
-        # 5. compliance — non-critical, in-house fallback (see compliance.py
-        # for why: PyAI Trace needs a paid add-on most orgs don't have).
-        # Never blocks the run; absence just means no compliance panel.
-        compliance = None
-        try:
-            compliance = staged("compliance", lambda: run_compliance_check(lines))
-        except StageFailed:
-            pass
-
-        # 6. follow-up email — non-critical; failure means partial, not dead
-        try:
-            insights["follow_up_email"] = staged(
-                "compose_email", lambda: compose_email(lines, insights)
+        if entry_agent_id:
+            selected_ids, reasoning, dispatch_cost = [entry_agent_id], "Entry rule pinned this agent.", 0.0
+        else:
+            orch = session.scalars(select(Orchestrator).where(Orchestrator.enabled.is_(True))).first()
+            orch_prompt = orch.system_prompt if orch else "Decide which agents this call needs."
+            selected_ids, reasoning, dispatch_cost = orchestrator_mod.dispatch(
+                lines, [_agent_dict(a) for a in enabled_agents], orch_prompt
             )
-        except StageFailed:
-            insights["follow_up_email"] = None
 
-    except BudgetExceeded as e:
-        # attribute the breach, skip the rest, finalize cleanly
-        for s in rs.stages:
-            if s.status == "pending":
-                s.status = "skipped"
-        _persist(run_id, rs, insights, note=str(e))
-        return
-    except StageFailed as e:
-        rs.skip_remaining(e.stage)
-        _persist(run_id, rs, insights)
-        return
+        selected_agents = [a for a in enabled_agents if a.id in selected_ids]
+        agent_skills: dict[str, list[Skill]] = {}
+        for agent in selected_agents:
+            links = session.scalars(select(AgentSkill).where(AgentSkill.agent_id == agent.id)).all()
+            skill_ids = [l.skill_id for l in links]
+            agent_skills[agent.id] = (
+                session.scalars(select(Skill).where(Skill.id.in_(skill_ids))).all() if skill_ids else []
+            )
 
-    _persist(run_id, rs, insights, compliance=compliance)
+        run.orchestrator_reasoning = reasoning
+        run.cost_usd = round(fmt_cost + dispatch_cost, 4)
+        session.commit()
 
+        agents_to_run = [(a, agent_skills[a.id]) for a in selected_agents]
+        spent_so_far = round(fmt_cost + dispatch_cost, 4)
+        budget = max_cost_per_run()
 
-def _persist(run_id: str, rs: RunState, insights: dict, note: str | None = None, compliance: dict | None = None) -> None:
+    budget_note = None
+    for agent, skills in agents_to_run:
+        if spent_so_far > budget:
+            budget_note = (
+                f"run budget ${budget:.2f} exceeded before agent {agent.name!r} could run "
+                f"(spent ${spent_so_far:.4f}) — remaining agents skipped"
+            )
+            break
+        _run_one_agent(agent, skills, call_id, run_id, lines)
+        with get_session() as session:
+            spent_so_far = round(
+                spent_so_far
+                + (session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()[-1].cost_usd),
+                4,
+            )
+
     with get_session() as session:
         run = session.get(Run, run_id)
-        run.stages = rs.as_dicts()
-        run.status = rs.final_status()
-        run.insights = insights or None
-        run.compliance = compliance
-        run.cost_usd = round(rs.spent, 4)
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()
+        run.status = _aggregate_status([ar.status for ar in agent_runs])
+        run.cost_usd = round(run.cost_usd + sum(ar.cost_usd for ar in agent_runs), 4)
+        if budget_note:
+            run.orchestrator_reasoning = f"{run.orchestrator_reasoning}\n\n{budget_note}"
         run.finished_at = datetime.now(timezone.utc)
-        if note:
-            stages = [dict(s) for s in run.stages]
-            for s in stages:
-                if s["status"] == "failed" and not s.get("error"):
-                    s["error"] = note
-            run.stages = stages
         session.commit()

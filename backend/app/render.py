@@ -1,16 +1,39 @@
-"""Rendering: effective insights, Markdown export, and the shareable snapshot.
+"""Rendering: effective agent outputs, Markdown export, and the shareable
+snapshot.
 
 Shared by the export endpoints and the share-link snapshot so a call renders
-identically whether downloaded or shared. The share snapshot deliberately
-excludes the raw transcript and the internal compliance panel.
+identically whether downloaded or shared. compliance-check's output is
+deliberately excluded everywhere here — the old design enforced "compliance
+never leaves the building" structurally (a separate Run.compliance column
+these functions never read); now that compliance-check is an ordinary seeded
+skill living inside AgentRun.output, the same exclusion is enforced by name.
 """
 
 from typing import Any
 
+from sqlalchemy import select
 
-def effective_insights(run) -> dict | None:
-    """Human edits win over the original AI output for anything user-facing."""
-    return run.edited_insights or run.insights
+from .models import Agent, AgentRun
+
+EXCLUDED_SKILLS = {"compliance-check"}
+
+
+def effective_agent_outputs(session, run) -> list[dict]:
+    """[{"agent_name", "output", "edited"}, ...] for every AgentRun on this
+    run. Human edits win over the original AI output per AgentRun — same
+    precedent as the old edited_insights-over-insights rule. compliance-check
+    is stripped from `output` unconditionally."""
+    out = []
+    for ar in session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all():
+        agent = session.get(Agent, ar.agent_id)
+        raw = ar.edited_output or ar.output or {}
+        filtered = {k: v for k, v in raw.items() if k not in EXCLUDED_SKILLS}
+        out.append({
+            "agent_name": agent.name if agent else "Unknown agent",
+            "output": filtered,
+            "edited": bool(ar.edited_output),
+        })
+    return out
 
 
 def _cite(evidence: list) -> str:
@@ -19,57 +42,35 @@ def _cite(evidence: list) -> str:
     return " " + " ".join(f"[L{e['line']}]" for e in evidence)
 
 
-def to_markdown(call, run, insights: dict, *, include_transcript: bool = False, transcript=None) -> str:
-    lines: list[str] = [f"# {call.title}", ""]
-    lines.append(f"_Status: {run.status}_" + (" · _edited_" if run.edited_insights else ""))
-    lines.append("")
+def _render_field(name: str, value) -> str:
+    """Formats one skill field generically by shape, not by name — a
+    score ({"score","justification","evidence"}), a check
+    ({"value","evidence"}), or a claims list ([{"text","evidence"}, ...])."""
+    label = name.replace("_", " ")
+    if isinstance(value, dict) and "score" in value:
+        return f"- {label}: **{value.get('score')}** — {value.get('justification', '')}{_cite(value.get('evidence', []))}"
+    if isinstance(value, dict) and "value" in value:
+        val = "yes" if value.get("value") else "no" if value.get("value") is False else "—"
+        return f"- {label}: **{val}**{_cite(value.get('evidence', []))}"
+    if isinstance(value, list):
+        if not value:
+            return f"- {label}: none"
+        return "\n".join(f"- {item.get('text', '')}{_cite(item.get('evidence', []))}" for item in value)
+    return f"- {label}: {value}"
 
-    intent = insights.get("intent") or {}
-    if intent.get("value"):
-        lines.append(f"**Intent:** {intent['value']} ({round((intent.get('confidence') or 0) * 100)}%)")
-        lines.append("")
 
-    if insights.get("summary"):
-        lines.append("## Summary")
-        for s in insights["summary"]:
-            lines.append(f"- {s['text']}{_cite(s.get('evidence', []))}")
-        lines.append("")
+def to_markdown(call, run, agent_outputs: list[dict], *, include_transcript: bool = False, transcript=None) -> str:
+    lines: list[str] = [f"# {call.title}", "", f"_Status: {run.status}_", ""]
 
-    if insights.get("objections"):
-        lines.append("## Objections & concerns")
-        for o in insights["objections"]:
-            status = f" ({o['status']})" if o.get("status") else ""
-            lines.append(f"- **{o['label']}**{status}: {o['detail']}{_cite(o.get('evidence', []))}")
-        lines.append("")
-
-    if insights.get("next_steps"):
-        lines.append("## Next steps")
-        for n in insights["next_steps"]:
-            owner = f" — _{n['owner']}_" if n.get("owner") else ""
-            lines.append(f"- {n['text']}{owner}{_cite(n.get('evidence', []))}")
-        lines.append("")
-
-    sc = insights.get("scorecard") or {}
-    if sc.get("fields"):
-        lines.append(f"## Scorecard ({sc.get('pack', '')})")
-        for f in sc["fields"]:
-            if f["kind"] == "deterministic":
-                val = "yes" if f.get("value") else "no" if f.get("value") is False else "—"
-                lines.append(f"- {f['name'].replace('_', ' ')}: **{val}**{_cite(f.get('evidence', []))}")
-            else:
-                lines.append(
-                    f"- {f['name'].replace('_', ' ')}: **{f.get('score')}/{f.get('max_score')}** "
-                    f"— {f.get('justification', '')}{_cite(f.get('evidence', []))}"
-                )
-        lines.append("")
-
-    email = insights.get("follow_up_email")
-    if email:
-        lines.append("## Follow-up email")
-        lines.append(f"**Subject:** {email['subject']}")
-        lines.append("")
-        lines.append(email["body"])
-        lines.append("")
+    for ao in agent_outputs:
+        if not ao["output"]:
+            continue
+        lines.append(f"## {ao['agent_name']}" + (" · _edited_" if ao["edited"] else ""))
+        for skill_name, fields in ao["output"].items():
+            lines.append(f"### {skill_name.replace('-', ' ').title()}")
+            for field_name, value in (fields or {}).items():
+                lines.append(_render_field(field_name, value))
+            lines.append("")
 
     if include_transcript and transcript:
         lines.append("## Transcript")
@@ -80,8 +81,8 @@ def to_markdown(call, run, insights: dict, *, include_transcript: bool = False, 
     return "\n".join(lines).rstrip() + "\n"
 
 
-def export_json(call, run, insights: dict) -> dict[str, Any]:
-    """Full structured export — includes evidence, excludes internal compliance."""
+def export_json(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
+    """Full structured export — includes evidence, excludes compliance-check."""
     return {
         "call": {
             "id": call.id,
@@ -89,21 +90,16 @@ def export_json(call, run, insights: dict) -> dict[str, Any]:
             "duration_s": call.duration_s,
             "recorded_at": call.recorded_at.isoformat(),
         },
-        "run": {"status": run.status, "edited": run.edited_insights is not None},
-        "insights": insights,
+        "run": {"status": run.status, "edited": any(ao["edited"] for ao in agent_outputs)},
+        "agent_runs": agent_outputs,
     }
 
 
-def share_snapshot(call, run, insights: dict) -> dict[str, Any]:
-    """Frozen at share time. No raw transcript, no compliance panel."""
+def share_snapshot(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
+    """Frozen at share time. No raw transcript, no compliance-check."""
     return {
         "title": call.title,
         "recorded_at": call.recorded_at.isoformat(),
         "duration_s": call.duration_s,
-        "intent": (insights.get("intent") or {}).get("value"),
-        "summary": insights.get("summary", []),
-        "objections": insights.get("objections", []),
-        "next_steps": insights.get("next_steps", []),
-        "scorecard": insights.get("scorecard"),
-        "follow_up_email": insights.get("follow_up_email"),
+        "agent_runs": agent_outputs,
     }

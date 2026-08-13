@@ -66,22 +66,6 @@ def test_compile_review_edit_activate_flow(monkeypatch):
         assert any(p["id"] == pid and p["status"] == "active" for p in packs)
 
 
-def test_active_pack_overrides_builtin(monkeypatch):
-    monkeypatch.setattr(pc, "complete_json", lambda *a, **k: (COMPILER_OUT, 0.004))
-    with TestClient(app) as c:
-        pid = c.post("/api/packs/compile", json={"instructions": "x"}).json()["id"]
-        c.post(f"/api/packs/{pid}/activate")
-
-    from app.pipeline import select_pack
-    pack = select_pack("support")  # even for support intent, active custom pack wins
-    assert pack["name"] == "meddic-sales"
-
-    # deactivate → back to built-ins
-    with TestClient(app) as c:
-        c.post("/api/packs/deactivate")
-    assert select_pack("support")["name"] == "support-default"
-
-
 def test_activating_one_retires_others(monkeypatch):
     monkeypatch.setattr(pc, "complete_json", lambda *a, **k: (COMPILER_OUT, 0.004))
     with TestClient(app) as c:

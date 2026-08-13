@@ -54,16 +54,12 @@ class Run(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"))
-    pack_id: Mapped[str | None] = mapped_column(ForeignKey("insight_packs.id"), nullable=True)
-    # pending | running | shipped | partial | failed
+    # pending | running | shipped | partial | failed — aggregate across this call's AgentRuns
     status: Mapped[str] = mapped_column(String, default="pending")
-    # [{"name","status","attempts","cost_usd","error","dropped_claims"}]
+    # [{"name","status","attempts","cost_usd","error"}] — transcribe-stage bookkeeping only;
+    # per-skill steps live on AgentRun.steps now
     stages: Mapped[list] = mapped_column(JSON, default=list)
-    insights: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # immutable AI output
-    # human edits made in review; overrides `insights` for export/share only.
-    # kept separate so the original AI output (and its receipts) is never lost.
-    edited_insights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    compliance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    orchestrator_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

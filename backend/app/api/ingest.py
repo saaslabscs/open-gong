@@ -17,7 +17,6 @@ from sqlalchemy import select
 from ..db import DATA_DIR, get_session
 from ..jobs import enqueue
 from ..models import Call, Run
-from ..run_state import STAGES
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
@@ -27,10 +26,7 @@ ALLOWED_SUFFIXES = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".webm"}
 
 
 def _fresh_stages() -> list[dict]:
-    return [
-        {"name": s, "status": "pending", "attempts": 0, "cost_usd": 0.0, "error": None}
-        for s in STAGES
-    ]
+    return [{"name": "transcribe", "status": "pending", "attempts": 0, "cost_usd": 0.0, "error": None}]
 
 
 def _create_call(session, *, title: str, source: str, external_id: str, audio_path: str) -> tuple[Call, bool]:

@@ -22,7 +22,7 @@ from .api.share import router as share_router
 from .api.webhooks import router as webhooks_router
 from .db import Base, engine, get_session
 from .jobs import worker_loop
-from .models import Call, Run
+from .models import Agent, AgentRun, Call, Run
 
 
 @asynccontextmanager
@@ -85,9 +85,6 @@ def list_calls() -> list[dict]:
         out = []
         for c in calls:
             run = _latest_run(session, c.id)
-            intent = None
-            if run and run.insights:
-                intent = run.insights.get("intent", {}).get("value")
             out.append(
                 {
                     "id": c.id,
@@ -95,7 +92,6 @@ def list_calls() -> list[dict]:
                     "source": c.source,
                     "duration_s": c.duration_s,
                     "recorded_at": c.recorded_at.isoformat(),
-                    "intent": intent,
                     "run_status": run.status if run else "pending",
                 }
             )
@@ -109,6 +105,24 @@ def get_call(call_id: str) -> dict:
         if call is None:
             raise HTTPException(status_code=404, detail="call not found")
         run = _latest_run(session, call_id)
+        agent_runs_out = []
+        if run:
+            agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all()
+            for ar in agent_runs:
+                agent = session.get(Agent, ar.agent_id)
+                agent_runs_out.append(
+                    {
+                        "id": ar.id,
+                        "agent_id": ar.agent_id,
+                        "agent_name": agent.name if agent else "Unknown agent",
+                        "status": ar.status,
+                        "steps": ar.steps,
+                        "output": ar.edited_output or ar.output,
+                        "edited": bool(ar.edited_output),
+                        "cost_usd": ar.cost_usd,
+                    }
+                )
+
         return {
             "call": {
                 "id": call.id,
@@ -121,16 +135,14 @@ def get_call(call_id: str) -> dict:
             "run": {
                 "status": run.status if run else "pending",
                 "stages": run.stages if run else [],
-                "edited": bool(run.edited_insights) if run else False,
+                "orchestrator_reasoning": run.orchestrator_reasoning if run else None,
             },
             "transcript": (
                 {"language": call.transcript.language, "lines": call.transcript.lines}
                 if call.transcript
                 else None
             ),
-            # effective insights: human edits win over AI output for display
-            "insights": (run.edited_insights or run.insights) if run else None,
-            "compliance": run.compliance if run else None,
+            "agent_runs": agent_runs_out,
         }
 
 

@@ -25,7 +25,6 @@ def test_list_calls_returns_seeded_samples():
         assert len(calls) == len(list(SAMPLES_DIR.glob("*.json")))
         for call in calls:
             assert call["run_status"] in {"shipped", "partial", "failed"}
-            assert call["intent"] in {"sales", "support"}
 
 
 def test_get_call_detail_and_404():
@@ -33,7 +32,7 @@ def test_get_call_detail_and_404():
         calls = c.get("/api/calls").json()
         detail = c.get(f"/api/calls/{calls[0]['id']}").json()
         assert detail["transcript"]["lines"]
-        assert detail["insights"]["summary"]
+        assert isinstance(detail["agent_runs"], list)
         assert detail["run"]["status"] in {"shipped", "partial", "failed"}
         assert c.get("/api/calls/nope").status_code == 404
 
