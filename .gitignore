@@ -1,0 +1,30 @@
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+
+# Leftover claude-flow/ruflo scaffolding from an earlier `init` — local tool
+# state, not Open Gong source. Left in place per the project plan but not
+# tracked, same treatment as node_modules/.venv.
+.agents/
+.claude/
+.claude-flow/
+.swarm/
+.mcp.json
+CLAUDE.md
+ruvector.db
+.DS_Store
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+
+# Local data
+backend/data/
+*.sqlite3

@@ -1,0 +1,264 @@
+{
+  "call": {
+    "id": "sample-05",
+    "title": "Outbound cold call — Cedar Grove Dental",
+    "source": "sample",
+    "duration_s": 248,
+    "recorded_at": "2026-07-28T19:05:00Z",
+    "participants": ["Jake (SDR, PatientRocket)", "Linda (Owner, Cedar Grove Dental)"]
+  },
+  "run": {
+    "status": "shipped",
+    "stages": [
+      { "name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.008, "error": null },
+      { "name": "detect_intent", "status": "ok", "attempts": 1, "cost_usd": 0.002, "error": null },
+      { "name": "extract", "status": "ok", "attempts": 1, "cost_usd": 0.016, "error": null },
+      { "name": "validate", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": null, "dropped_claims": 0 },
+      { "name": "score", "status": "ok", "attempts": 1, "cost_usd": 0.007, "error": null },
+      { "name": "compose_email", "status": "ok", "attempts": 1, "cost_usd": 0.003, "error": null }
+    ]
+  },
+  "transcript": {
+    "language": "en",
+    "lines": [
+      { "line": 1, "speaker": "Jake", "text": "Hi, is this Linda? Linda Alvarez?" },
+      { "line": 2, "speaker": "Linda", "text": "Yes, who's calling?" },
+      { "line": 3, "speaker": "Jake", "text": "Linda! Jake Turner over at PatientRocket. How's your Tuesday going?" },
+      { "line": 4, "speaker": "Linda", "text": "It's fine — sorry, what is this regarding? I'm between patients." },
+      { "line": 5, "speaker": "Jake", "text": "I'll be quick, I promise. We help dental practices like yours fill their chairs. I was on your website this morning and noticed you're not running any online booking. You're leaving serious money on the table, Linda." },
+      { "line": 6, "speaker": "Linda", "text": "We get most of our patients through referrals, honestly." },
+      { "line": 7, "speaker": "Jake", "text": "Referrals are great, but they don't scale. Here's the thing — our system is guaranteed to double your bookings in 30 days. Guaranteed. We do it for practices all over the state." },
+      { "line": 8, "speaker": "Linda", "text": "Double? That seems... how would you even guarantee something like that?" },
+      { "line": 9, "speaker": "Jake", "text": "Because it works, Linda. Automated recall campaigns, review boosting, a booking widget — patients book themselves at midnight while you sleep. When was the last time your front desk filled a Saturday slot?" },
+      { "line": 10, "speaker": "Linda", "text": "We don't open Saturdays." },
+      { "line": 11, "speaker": "Jake", "text": "See, that's exactly the kind of untapped revenue I'm talking about! Practices that open Saturdays with our system see their best numbers on Saturdays." },
+      { "line": 12, "speaker": "Linda", "text": "We're not opening Saturdays. Look, how much does this cost?" },
+      { "line": 13, "speaker": "Jake", "text": "Normally the platform runs seven ninety-nine a month. But — and this is why I'm glad I caught you today — we're closing out the quarter. Four ninety-nine a month, setup fee waived. That's thirty-six hundred dollars in savings over the year." },
+      { "line": 14, "speaker": "Linda", "text": "That's still a lot for us. We're a two-chair practice." },
+      { "line": 15, "speaker": "Jake", "text": "Linda, if we double your bookings — and we will — this pays for itself in the first week. One crown covers the month. You do crowns, right?" },
+      { "line": 16, "speaker": "Linda", "text": "Of course we do crowns." },
+      { "line": 17, "speaker": "Jake", "text": "There you go! So the way this works is super simple. I send you a link, you pop in a card, and my onboarding team calls you tomorrow morning." },
+      { "line": 18, "speaker": "Linda", "text": "Hold on, I'm not putting in a card today. I'd want to talk to my office manager first. She handles all of this." },
+      { "line": 19, "speaker": "Jake", "text": "Totally understand. What's her name?" },
+      { "line": 20, "speaker": "Linda", "text": "Karen. She's off this week, actually." },
+      { "line": 21, "speaker": "Jake", "text": "Okay, here's my concern with waiting, Linda. This pricing is only good if you sign today. Tomorrow it goes back to seven ninety-nine, and I can't get the setup fee waived again — my manager signed off on this one as a favor." },
+      { "line": 22, "speaker": "Linda", "text": "If the price only exists today, that makes me trust it less, not more, to be honest with you." },
+      { "line": 23, "speaker": "Jake", "text": "No no, it's not a trick — it's just how the quarter closes out. Finance stuff, above my pay grade. Look, what if I just take the card info now to hold the rate? We wouldn't charge anything until you've talked to Karen." },
+      { "line": 24, "speaker": "Linda", "text": "I'm not giving card details over the phone to someone who cold-called me. I'm sure you understand." },
+      { "line": 25, "speaker": "Jake", "text": "That's fair, that's fair. Okay, different idea. I email you the agreement, you sign it electronically today, and billing doesn't start until Monday. That way you lock the rate and Karen still gets her say." },
+      { "line": 26, "speaker": "Linda", "text": "If she gets her say after I've already signed, that's not really her say, is it?" },
+      { "line": 27, "speaker": "Jake", "text": "Ha! You're sharp, Linda. Okay. But seriously, I've seen practices sit on this and call me back a month later, and I have to give them the higher rate. It breaks my heart every time." },
+      { "line": 28, "speaker": "Linda", "text": "I'll take my chances. Can you call back Thursday? Karen is back Thursday." },
+      { "line": 29, "speaker": "Jake", "text": "I can do Thursday. But let me ask you this — if Karen likes what she hears, is there anything else stopping you from moving forward?" },
+      { "line": 30, "speaker": "Linda", "text": "I'd want to see it actually working somewhere first. Do you have other dental offices around here using it?" },
+      { "line": 31, "speaker": "Jake", "text": "Tons. I'd have to check which ones are local to you, but tons." },
+      { "line": 32, "speaker": "Linda", "text": "Okay. Well, get me a couple of names for Thursday, then." },
+      { "line": 33, "speaker": "Jake", "text": "You got it. And Linda, one more time before I let you go — the four ninety-nine, I really can't promise it'll still be there Thursday. If you sign today I can guarantee it. Two minutes, one signature." },
+      { "line": 34, "speaker": "Linda", "text": "Jake. Thursday." },
+      { "line": 35, "speaker": "Jake", "text": "Thursday it is! Ten a.m. good for you?" },
+      { "line": 36, "speaker": "Linda", "text": "Mornings are patients. After three." },
+      { "line": 37, "speaker": "Jake", "text": "Three thirty Thursday, I'll call this number. And I'll email you some info today so you and Karen can look it over before we talk." },
+      { "line": 38, "speaker": "Linda", "text": "Fine. I need to get back to my patient now." },
+      { "line": 39, "speaker": "Jake", "text": "Of course! Talk Thursday, Linda. You're going to love this." },
+      { "line": 40, "speaker": "Linda", "text": "We'll see. Bye." }
+    ]
+  },
+  "insights": {
+    "intent": {
+      "value": "sales",
+      "confidence": 0.96,
+      "evidence": [
+        { "quote": "We help dental practices like yours fill their chairs.", "line": 5 }
+      ]
+    },
+    "summary": [
+      {
+        "text": "Cold outbound call to Linda, owner of a two-chair dental practice that relies on referrals and was not actively looking for a booking solution.",
+        "evidence": [
+          { "quote": "We get most of our patients through referrals, honestly.", "line": 6 },
+          { "quote": "That's still a lot for us. We're a two-chair practice.", "line": 14 }
+        ]
+      },
+      {
+        "text": "Jake pitched PatientRocket with an unsubstantiated results guarantee, which Linda immediately questioned and never received a substantive answer to.",
+        "evidence": [
+          { "quote": "our system is guaranteed to double your bookings in 30 days", "line": 7 },
+          { "quote": "how would you even guarantee something like that?", "line": 8 }
+        ]
+      },
+      {
+        "text": "Pricing was framed as a same-day-only deal: $799/month list, discounted to $499/month with setup fee waived, positioned as expiring if Linda did not sign on the call.",
+        "evidence": [
+          { "quote": "Four ninety-nine a month, setup fee waived.", "line": 13 },
+          { "quote": "This pricing is only good if you sign today.", "line": 21 }
+        ]
+      },
+      {
+        "text": "Linda repeatedly deferred — she wants her office manager Karen involved and local customer references — but Jake continued pressing for a same-day signature, including asking for card details and an e-signature before Karen's review.",
+        "evidence": [
+          { "quote": "I'd want to talk to my office manager first. She handles all of this.", "line": 18 },
+          { "quote": "If you sign today I can guarantee it. Two minutes, one signature.", "line": 33 }
+        ]
+      },
+      {
+        "text": "The call ended with a weak commitment: Jake will call back Thursday at 3:30 pm with reference names, and Linda closed with a noncommittal response.",
+        "evidence": [
+          { "quote": "Three thirty Thursday, I'll call this number.", "line": 37 },
+          { "quote": "We'll see. Bye.", "line": 40 }
+        ]
+      }
+    ],
+    "objections": [
+      {
+        "label": "timing / decision process",
+        "detail": "Linda will not commit without her office manager Karen, who is off until Thursday; she explicitly asked to be called back rather than deciding on the spot.",
+        "status": "open",
+        "evidence": [
+          { "quote": "I'd want to talk to my office manager first. She handles all of this.", "line": 18 },
+          { "quote": "Can you call back Thursday? Karen is back Thursday.", "line": 28 }
+        ]
+      },
+      {
+        "label": "skepticism of the guarantee",
+        "detail": "Linda directly challenged the doubled-bookings guarantee and later said the expiring price made her trust the offer less; neither concern was answered with evidence.",
+        "status": "open — unaddressed",
+        "evidence": [
+          { "quote": "how would you even guarantee something like that?", "line": 8 },
+          { "quote": "If the price only exists today, that makes me trust it less, not more, to be honest with you.", "line": 22 }
+        ]
+      },
+      {
+        "label": "price for practice size",
+        "detail": "Even the discounted $499/month rate is significant for a two-chair practice; Jake responded with the guarantee claim rather than ROI evidence.",
+        "status": "open",
+        "evidence": [
+          { "quote": "That's still a lot for us. We're a two-chair practice.", "line": 14 }
+        ]
+      }
+    ],
+    "next_steps": [
+      {
+        "text": "Jake calls Linda back Thursday at 3:30 pm, once office manager Karen is back.",
+        "owner": "Jake",
+        "evidence": [
+          { "quote": "Can you call back Thursday? Karen is back Thursday.", "line": 28 },
+          { "quote": "Three thirty Thursday, I'll call this number.", "line": 37 }
+        ]
+      },
+      {
+        "text": "Jake emails product information today for Linda and Karen to review before Thursday.",
+        "owner": "Jake",
+        "evidence": [
+          { "quote": "I'll email you some info today so you and Karen can look it over before we talk", "line": 37 }
+        ]
+      },
+      {
+        "text": "Jake brings names of local dental offices using PatientRocket to the Thursday call.",
+        "owner": "Jake",
+        "evidence": [
+          { "quote": "Well, get me a couple of names for Thursday, then.", "line": 32 }
+        ]
+      }
+    ],
+    "follow_up_email": {
+      "subject": "Info for you and Karen ahead of Thursday — PatientRocket",
+      "body": "Hi Linda,\n\nThanks for taking my call today between patients — I appreciate it.\n\nAs promised, here's an overview of PatientRocket for you and Karen to look through: online booking, automated recall campaigns, and review management, built for small practices.\n\nFor Thursday's call at 3:30 pm I'll also bring:\n- A couple of dental offices in your area you can speak with directly\n- Typical results from two-chair practices like yours, so you can judge the numbers for yourselves\n- Current pricing options in writing, so there's no pressure to decide on a phone call\n\nIf Thursday stops working for you or Karen, just reply here and we'll find another time.\n\nBest,\nJake Turner\nPatientRocket"
+    },
+    "scorecard": {
+      "pack": "sales-default",
+      "pack_version": 1,
+      "fields": [
+        {
+          "name": "recording_disclosure",
+          "kind": "deterministic",
+          "value": false,
+          "evidence": []
+        },
+        {
+          "name": "budget_discussed",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Look, how much does this cost?", "line": 12 },
+            { "quote": "That's still a lot for us. We're a two-chair practice.", "line": 14 }
+          ]
+        },
+        {
+          "name": "decision_process_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "I'd want to talk to my office manager first. She handles all of this.", "line": 18 }
+          ]
+        },
+        {
+          "name": "timeline_identified",
+          "kind": "deterministic",
+          "value": false,
+          "evidence": []
+        },
+        {
+          "name": "next_step_secured",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Three thirty Thursday, I'll call this number.", "line": 37 }
+          ]
+        },
+        {
+          "name": "discovery_quality",
+          "kind": "judgment",
+          "score": 1,
+          "max_score": 5,
+          "justification": "Jake pitched before asking a single question about the practice. The few questions he did ask were setups for the pitch rather than genuine discovery, and he missed obvious signals — he pitched Saturday bookings to a practice that does not open Saturdays, and never explored Linda's referral-based model or actual capacity needs.",
+          "evidence": [
+            { "quote": "You're leaving serious money on the table, Linda.", "line": 5 },
+            { "quote": "We don't open Saturdays.", "line": 10 }
+          ]
+        },
+        {
+          "name": "objection_handling",
+          "kind": "judgment",
+          "score": 2,
+          "max_score": 5,
+          "justification": "Objections were met with assertion and urgency rather than evidence. The guarantee challenge got 'Because it works' instead of data, the trust concern about expiring pricing was waved off, and Linda's clear deferral to her office manager was answered with three separate attempts to secure a same-day commitment. Jake did eventually accept the Thursday callback and agreed to bring references.",
+          "evidence": [
+            { "quote": "Because it works, Linda.", "line": 9 },
+            { "quote": "This pricing is only good if you sign today.", "line": 21 },
+            { "quote": "If you sign today I can guarantee it. Two minutes, one signature.", "line": 33 }
+          ]
+        }
+      ]
+    }
+  },
+  "compliance": {
+    "verdict": "WARN",
+    "audit_hash": "trace_demo_9f2c41a8",
+    "source": "trace",
+    "findings": [
+      {
+        "rule": "recording_disclosure_missing",
+        "severity": "high",
+        "detail": "No recording disclosure was given at any point on the call. The recipient was never informed the call was being recorded, which may violate consent requirements in two-party consent jurisdictions.",
+        "evidence": []
+      },
+      {
+        "rule": "unsubstantiated_results_claim",
+        "severity": "high",
+        "detail": "The rep made a specific, guaranteed performance claim with no substantiation, disclosed conditions, or supporting data — and when challenged, offered assertion rather than evidence.",
+        "evidence": [
+          { "quote": "our system is guaranteed to double your bookings in 30 days", "line": 7 }
+        ]
+      },
+      {
+        "rule": "pressure_urgency_tactic",
+        "severity": "medium",
+        "detail": "The rep used artificial deadline pressure to push for a same-day signature, repeating the tactic after the prospect explicitly deferred the decision to her office manager.",
+        "evidence": [
+          { "quote": "This pricing is only good if you sign today.", "line": 21 },
+          { "quote": "If you sign today I can guarantee it. Two minutes, one signature.", "line": 33 }
+        ]
+      }
+    ]
+  }
+}

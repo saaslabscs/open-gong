@@ -1,0 +1,259 @@
+{
+  "call": {
+    "id": "sample-02",
+    "title": "Pricing negotiation — Meridian Recruiting",
+    "source": "sample",
+    "duration_s": 383,
+    "recorded_at": "2026-07-21T17:30:00Z",
+    "participants": ["Priya (AE, Open Gong)", "Tom (Head of Sales, Meridian Recruiting)"]
+  },
+  "run": {
+    "status": "shipped",
+    "stages": [
+      { "name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.012, "error": null },
+      { "name": "detect_intent", "status": "ok", "attempts": 1, "cost_usd": 0.002, "error": null },
+      { "name": "extract", "status": "ok", "attempts": 1, "cost_usd": 0.021, "error": null },
+      { "name": "validate", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": null, "dropped_claims": 0 },
+      { "name": "score", "status": "ok", "attempts": 1, "cost_usd": 0.009, "error": null },
+      { "name": "compose_email", "status": "ok", "attempts": 1, "cost_usd": 0.004, "error": null }
+    ]
+  },
+  "transcript": {
+    "language": "en",
+    "lines": [
+      { "line": 1, "speaker": "Priya", "text": "Hi Tom, thanks for hopping on. Quick note before we start — this call is being recorded for note-taking purposes. Is that alright with you?" },
+      { "line": 2, "speaker": "Tom", "text": "Yep, fine by me." },
+      { "line": 3, "speaker": "Priya", "text": "Great. So — three weeks into the trial. How has the team been getting on with it?" },
+      { "line": 4, "speaker": "Tom", "text": "Honestly? Better than I expected. The recruiters actually use it, which is more than I can say for the last tool we rolled out." },
+      { "line": 5, "speaker": "Priya", "text": "That's a low bar, but I'll take it. Anything that hasn't landed well?" },
+      { "line": 6, "speaker": "Tom", "text": "A couple of the senior folks grumbled about learning another tool, but the call summaries won them over pretty quickly. My ops lead pulled the usage numbers yesterday — nineteen of the twenty-four trial seats were active every single week." },
+      { "line": 7, "speaker": "Priya", "text": "Nineteen of twenty-four weekly actives is genuinely strong for a trial. Are the summaries what's saving them time, or is it more the coaching side?" },
+      { "line": 8, "speaker": "Tom", "text": "Both, but the time saving is the visible one. My senior recruiters reckon they're getting about forty minutes a day back on call write-ups. That's real." },
+      { "line": 9, "speaker": "Priya", "text": "Forty minutes a day is the number I'd anchor on. What does that translate to in placements, roughly?" },
+      { "line": 10, "speaker": "Tom", "text": "Hard to say precisely, but my back-of-envelope is that if each recruiter gets one extra candidate conversation a day out of it, the thing pays for itself several times over." },
+      { "line": 11, "speaker": "Priya", "text": "That's the math I'd put in front of anyone who asks about the spend." },
+      { "line": 12, "speaker": "Tom", "text": "Look, the product does what you said it would. The question is whether the number works. Let's talk pricing." },
+      { "line": 13, "speaker": "Priya", "text": "Happy to. You've seen list — fifty dollars per seat per month, billed annually. At twenty-four seats that comes to fourteen thousand four hundred a year." },
+      { "line": 14, "speaker": "Tom", "text": "Right, and that's where I need you to sharpen your pencil. Fourteen and a half grand is a big line item for a firm our size. I'm not paying list." },
+      { "line": 15, "speaker": "Priya", "text": "Understood. Before I talk numbers, help me size this properly — is twenty-four the right seat count for the full rollout, or does that grow?" },
+      { "line": 16, "speaker": "Tom", "text": "We're hiring. Realistically we're at twenty-eight, maybe thirty seats by the middle of next year." },
+      { "line": 17, "speaker": "Priya", "text": "Okay, that matters, because I get more room on price as the commitment gets bigger. Two levers there — seat count, or term length. Have you thought about a two-year agreement?" },
+      { "line": 18, "speaker": "Tom", "text": "My default is annual. I've been burned on multi-year software deals before." },
+      { "line": 19, "speaker": "Priya", "text": "What happened, if you don't mind me asking?" },
+      { "line": 20, "speaker": "Tom", "text": "We signed three years on our old ATS. The product stagnated, support got slower every quarter, and we were stuck paying for it until last spring. I'm not eager to repeat that experience." },
+      { "line": 21, "speaker": "Priya", "text": "That's fair, and lock-in risk is real. Let me put both options on the table and you can react. On a straight annual at twenty-four seats, I can move from fifty down to forty-six a seat. On a two-year term, I can go to forty-two, and I'll lock that rate for any seats you add, so your new hires come in at the same price." },
+      { "line": 22, "speaker": "Tom", "text": "Forty-six is barely a dent. I'll be straight with you, Priya — we also ran a trial with CallScribe last quarter, and their rep called me last week quoting thirty-five a seat to win us back." },
+      { "line": 23, "speaker": "Priya", "text": "I appreciate you telling me directly. Can I ask — if CallScribe at thirty-five was the answer, why are we on this call?" },
+      { "line": 24, "speaker": "Tom", "text": "Because my recruiters didn't rate it. The transcripts were sloppy and the coaching features felt bolted on. But at a fifteen-dollar gap per seat, I have to at least weigh it." },
+      { "line": 25, "speaker": "Priya", "text": "That's the right way to weigh it. My honest take: if the transcript layer is sloppy, everything built on top of it is sloppy — summaries, coaching, all of it. Your team already voted with their usage. I'd guess nineteen of twenty-four seats a week is not what CallScribe adoption looked like." },
+      { "line": 26, "speaker": "Tom", "text": "No. Half the team had quietly stopped using it by week two." },
+      { "line": 27, "speaker": "Priya", "text": "So the fifteen-dollar gap is only a saving if people actually use the thing." },
+      { "line": 28, "speaker": "Tom", "text": "Fine, point taken. But I still can't take fourteen grand to my managing partner and call it a win. And there's another thing that worries me — the switching effort itself." },
+      { "line": 29, "speaker": "Priya", "text": "Say more?" },
+      { "line": 30, "speaker": "Tom", "text": "We just came off an ATS migration in the spring and the team is running on fumes. Even if we pick you, I can't afford six weeks of setup, integrations, and retraining. What does rollout actually involve?" },
+      { "line": 31, "speaker": "Priya", "text": "Less than you'd think, because you're not starting from zero — your team has been live on it for three weeks already. Going from trial to rollout means turning on the remaining five seats, connecting your ATS, and a forty-five minute admin session for your ops lead. The connector for your ATS is prebuilt. Call it two or three days elapsed, not six weeks." },
+      { "line": 32, "speaker": "Tom", "text": "And the trial data carries over? Nobody loses their call history?" },
+      { "line": 33, "speaker": "Priya", "text": "Everything carries over. Same workspace, same logins — nothing gets migrated because nothing moves." },
+      { "line": 34, "speaker": "Tom", "text": "Okay. That's less painful than I feared. So back to the number. Give me forty a seat on the annual and we can wrap this up this week." },
+      { "line": 35, "speaker": "Priya", "text": "Forty on a one-year I genuinely can't do — that's below where I'm allowed to go without a longer commitment. Here's my best structure. Annual at forty-four. Or the two-year at forty-two, and on the two-year I'll add a ninety-day performance clause." },
+      { "line": 36, "speaker": "Tom", "text": "What does the performance clause actually mean?" },
+      { "line": 37, "speaker": "Priya", "text": "If at day ninety your weekly active usage has dropped below what you saw in the trial, you can exit the second year with sixty days' written notice. It's our way of taking the ATS-contract scenario off the table — if the product stops earning its keep, you're not trapped." },
+      { "line": 38, "speaker": "Tom", "text": "Hm. That takes most of the sting out of the multi-year idea, I'll admit." },
+      { "line": 39, "speaker": "Priya", "text": "And with your hiring plan, the price lock matters too. At thirty seats next year, forty-two versus list is about a twenty-nine hundred dollar difference annually, and it grows with every hire." },
+      { "line": 40, "speaker": "Tom", "text": "You've clearly done this before. What about support? Part of the ATS disaster was waiting four days for ticket responses." },
+      { "line": 41, "speaker": "Priya", "text": "Both options include priority support — first response inside four business hours, and you keep me as your named contact rather than going into a queue." },
+      { "line": 42, "speaker": "Tom", "text": "Put that in writing. Alright. I'm not going to say yes today — I don't sign anything this size without my managing partner, and Dana is out until Monday." },
+      { "line": 43, "speaker": "Priya", "text": "Completely reasonable. What would help Dana say yes?" },
+      { "line": 44, "speaker": "Tom", "text": "She'll care about three things: the total cost, the exit clause in plain English, and proof the team actually uses it. The usage report covers the last one." },
+      { "line": 45, "speaker": "Priya", "text": "Then here's what I propose. I'll send you both options in writing by end of day tomorrow — annual at forty-four, and the two-year at forty-two with the ninety-day clause and the price lock on added seats — plus a one-page summary Dana can read in five minutes. Then can we get thirty minutes with you and Dana on Tuesday to walk through it?" },
+      { "line": 46, "speaker": "Tom", "text": "Tuesday afternoon works. Send the proposal over and I'll get it in front of her over the weekend." },
+      { "line": 47, "speaker": "Priya", "text": "Done. And so there's no artificial pressure here — I'll hold this pricing through the end of the month. You don't have to decide on the spot Tuesday." },
+      { "line": 48, "speaker": "Tom", "text": "Appreciated. Between us, if Dana is comfortable with the exit clause, the two-year is probably where we land." },
+      { "line": 49, "speaker": "Priya", "text": "Then I'll make sure the clause is airtight and readable. Anything else you need from me before Tuesday?" },
+      { "line": 50, "speaker": "Tom", "text": "One thing — a reference from another recruiting firm around our size would help. Dana likes hearing from peers." },
+      { "line": 51, "speaker": "Priya", "text": "I'll line one up. There's a fifty-person staffing firm in Denver that moved to us from CallScribe, actually — I'll ask if their ops director will take a call this week." },
+      { "line": 52, "speaker": "Tom", "text": "Perfect. That's everything from my side." },
+      { "line": 53, "speaker": "Priya", "text": "Great. So to recap: proposal with both options by end of day tomorrow, reference intro this week, and thirty minutes Tuesday afternoon with you and Dana. I'll send the calendar invite right after this call." },
+      { "line": 54, "speaker": "Tom", "text": "Sounds good. Talk Tuesday, Priya." },
+      { "line": 55, "speaker": "Priya", "text": "Thanks Tom. Speak then." }
+    ]
+  },
+  "insights": {
+    "intent": {
+      "value": "sales",
+      "confidence": 0.98,
+      "evidence": [
+        { "quote": "The question is whether the number works. Let's talk pricing.", "line": 12 }
+      ]
+    },
+    "summary": [
+      {
+        "text": "Trial adoption is strong: 19 of 24 seats were active every week, and senior recruiters report saving roughly 40 minutes a day on call write-ups.",
+        "evidence": [
+          { "quote": "nineteen of the twenty-four trial seats were active every single week", "line": 6 },
+          { "quote": "getting about forty minutes a day back on call write-ups", "line": 8 }
+        ]
+      },
+      {
+        "text": "Deal size is 24 seats at $50/seat/month list ($14,400/year), growing to 28-30 seats by mid next year. Priya's final structure: annual at $44/seat, or two-year at $42/seat with a 90-day performance exit clause and a price lock on added seats.",
+        "evidence": [
+          { "quote": "fifty dollars per seat per month, billed annually. At twenty-four seats that comes to fourteen thousand four hundred a year", "line": 13 },
+          { "quote": "Realistically we're at twenty-eight, maybe thirty seats by the middle of next year.", "line": 16 },
+          { "quote": "Annual at forty-four. Or the two-year at forty-two, and on the two-year I'll add a ninety-day performance clause.", "line": 35 }
+        ]
+      },
+      {
+        "text": "Competitor pressure: CallScribe quoted $35/seat to win Meridian back, but Tom's recruiters rejected it on transcript quality and half the team stopped using it during their trial.",
+        "evidence": [
+          { "quote": "their rep called me last week quoting thirty-five a seat to win us back", "line": 22 },
+          { "quote": "Half the team had quietly stopped using it by week two.", "line": 26 }
+        ]
+      },
+      {
+        "text": "Switching-cost concern was defused: because the team is already live from the trial, rollout is two to three days (five extra seats, ATS connector, one admin session), with all trial data carrying over.",
+        "evidence": [
+          { "quote": "I can't afford six weeks of setup, integrations, and retraining", "line": 30 },
+          { "quote": "Call it two or three days elapsed, not six weeks.", "line": 31 }
+        ]
+      },
+      {
+        "text": "Decision requires managing partner Dana (back Monday). Tom signaled the two-year option is the likely landing spot if the exit clause holds up.",
+        "evidence": [
+          { "quote": "I don't sign anything this size without my managing partner, and Dana is out until Monday", "line": 42 },
+          { "quote": "if Dana is comfortable with the exit clause, the two-year is probably where we land", "line": 48 }
+        ]
+      }
+    ],
+    "objections": [
+      {
+        "label": "price",
+        "detail": "Tom rejected list pricing ($14.4k/year) outright and pushed for $40/seat; Priya held at $44 annual / $42 two-year, backed by adoption and ROI framing.",
+        "status": "negotiated — final options on the table",
+        "evidence": [
+          { "quote": "Fourteen and a half grand is a big line item for a firm our size. I'm not paying list.", "line": 14 },
+          { "quote": "Give me forty a seat on the annual and we can wrap this up this week.", "line": 34 }
+        ]
+      },
+      {
+        "label": "multi-year lock-in",
+        "detail": "A bad three-year ATS contract (stagnant product, worsening support) made Tom default to annual; the 90-day performance exit clause largely neutralized this.",
+        "status": "addressed",
+        "evidence": [
+          { "quote": "We signed three years on our old ATS. The product stagnated, support got slower every quarter, and we were stuck paying for it until last spring.", "line": 20 },
+          { "quote": "That takes most of the sting out of the multi-year idea, I'll admit.", "line": 38 }
+        ]
+      },
+      {
+        "label": "switching cost / onboarding effort",
+        "detail": "Post-ATS-migration fatigue made Tom wary of a heavy rollout; Priya scoped it to two-three days since the team is already live on the trial workspace.",
+        "status": "addressed",
+        "evidence": [
+          { "quote": "the team is running on fumes. Even if we pick you, I can't afford six weeks of setup, integrations, and retraining", "line": 30 },
+          { "quote": "That's less painful than I feared.", "line": 34 }
+        ]
+      }
+    ],
+    "next_steps": [
+      {
+        "text": "Priya sends a written proposal with both options (annual $44, two-year $42 with exit clause and price lock) plus a one-page summary for Dana by end of day tomorrow.",
+        "owner": "Priya",
+        "evidence": [
+          { "quote": "I'll send you both options in writing by end of day tomorrow", "line": 45 }
+        ]
+      },
+      {
+        "text": "Thirty-minute review call Tuesday afternoon with Tom and managing partner Dana.",
+        "owner": "Priya",
+        "evidence": [
+          { "quote": "can we get thirty minutes with you and Dana on Tuesday to walk through it?", "line": 45 },
+          { "quote": "Tuesday afternoon works.", "line": 46 }
+        ]
+      },
+      {
+        "text": "Priya arranges a peer reference call with the ops director of a Denver staffing firm that switched from CallScribe.",
+        "owner": "Priya",
+        "evidence": [
+          { "quote": "a reference from another recruiting firm around our size would help", "line": 50 },
+          { "quote": "I'll ask if their ops director will take a call this week", "line": 51 }
+        ]
+      }
+    ],
+    "follow_up_email": {
+      "subject": "Proposal + Tuesday walkthrough — Open Gong x Meridian Recruiting",
+      "body": "Hi Tom,\n\nGreat conversation today — and congrats on those trial numbers. Nineteen of twenty-four seats active every week is the kind of adoption most tools never see.\n\nAs promised, you'll have the full proposal by end of day tomorrow with both options:\n- Annual: $44/seat/month for 24 seats\n- Two-year: $42/seat/month, with the 90-day performance exit clause and a price lock on every seat you add as you hire\n\nI'll include a one-page summary Dana can read in five minutes, with the exit clause spelled out in plain English. I'm also reaching out to the ops director at a Denver staffing firm that moved to us from CallScribe — I'll aim to have that intro ready before we meet.\n\nThis pricing holds through the end of the month, so there's no need to decide on the spot Tuesday.\n\nCalendar invite for Tuesday afternoon is on its way. Looking forward to meeting Dana.\n\nBest,\nPriya"
+    },
+    "scorecard": {
+      "pack": "sales-default",
+      "pack_version": 1,
+      "fields": [
+        {
+          "name": "recording_disclosure",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "this call is being recorded for note-taking purposes. Is that alright with you?", "line": 1 }
+          ]
+        },
+        {
+          "name": "budget_discussed",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "At twenty-four seats that comes to fourteen thousand four hundred a year", "line": 13 },
+            { "quote": "Fourteen and a half grand is a big line item for a firm our size.", "line": 14 }
+          ]
+        },
+        {
+          "name": "decision_process_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "I don't sign anything this size without my managing partner, and Dana is out until Monday.", "line": 42 },
+            { "quote": "She'll care about three things: the total cost, the exit clause in plain English, and proof the team actually uses it.", "line": 44 }
+          ]
+        },
+        {
+          "name": "timeline_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Tuesday afternoon works. Send the proposal over and I'll get it in front of her over the weekend.", "line": 46 },
+            { "quote": "I'll hold this pricing through the end of the month.", "line": 47 }
+          ]
+        },
+        {
+          "name": "next_step_secured",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Tuesday afternoon works.", "line": 46 }
+          ]
+        },
+        {
+          "name": "discovery_quality",
+          "kind": "judgment",
+          "score": 4,
+          "max_score": 5,
+          "justification": "Priya re-qualified before negotiating: seat growth, term-length appetite, the story behind the multi-year aversion, and Dana's actual decision criteria. She anchored value on the customer's own numbers (40 min/day saved) rather than defending price. Slightly less depth on Meridian's broader goals, but this was a negotiation call, not discovery.",
+          "evidence": [
+            { "quote": "is twenty-four the right seat count for the full rollout, or does that grow?", "line": 15 },
+            { "quote": "What would help Dana say yes?", "line": 43 }
+          ]
+        },
+        {
+          "name": "objection_handling",
+          "kind": "judgment",
+          "score": 5,
+          "max_score": 5,
+          "justification": "Every objection was met on the merits: the CallScribe price gap was reframed around adoption using Tom's own trial data, the lock-in fear was answered with a concrete 90-day performance exit clause, and the switching-cost worry was dissolved with a specific two-to-three-day rollout scope. Priya conceded on price only in exchange for commitment, and removed pressure by holding pricing through month end.",
+          "evidence": [
+            { "quote": "if CallScribe at thirty-five was the answer, why are we on this call?", "line": 23 },
+            { "quote": "you can exit the second year with sixty days' written notice", "line": 37 },
+            { "quote": "Forty on a one-year I genuinely can't do — that's below where I'm allowed to go without a longer commitment.", "line": 35 }
+          ]
+        }
+      ]
+    }
+  },
+  "compliance": null
+}

@@ -1,0 +1,257 @@
+{
+  "call": {
+    "id": "sample-04",
+    "title": "Cancellation call — Fieldnote Creative renewal increase",
+    "source": "sample",
+    "duration_s": 420,
+    "recorded_at": "2026-07-23T16:15:00Z",
+    "participants": ["Elena (Support, Open Gong)", "Marcus (Founder, Fieldnote Creative)"]
+  },
+  "run": {
+    "status": "partial",
+    "stages": [
+      { "name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.013, "error": null },
+      { "name": "detect_intent", "status": "ok", "attempts": 1, "cost_usd": 0.002, "error": null },
+      { "name": "extract", "status": "ok", "attempts": 1, "cost_usd": 0.021, "error": null },
+      { "name": "validate", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": null, "dropped_claims": 1 },
+      { "name": "score", "status": "ok", "attempts": 1, "cost_usd": 0.008, "error": null },
+      { "name": "compose_email", "status": "failed", "attempts": 3, "cost_usd": 0.006, "error": "LLM returned malformed JSON after 3 attempts: unterminated string at position 812" }
+    ]
+  },
+  "transcript": {
+    "language": "en",
+    "lines": [
+      { "line": 1, "speaker": "Elena", "text": "Thank you for calling Open Gong, this is Elena. Before we get going — this call is recorded for quality purposes. What can I do for you today?" },
+      { "line": 2, "speaker": "Marcus", "text": "Hi Elena. This is Marcus Webb, I'm the founder of Fieldnote Creative. We're on your Growth plan. I'm calling to cancel our subscription." },
+      { "line": 3, "speaker": "Elena", "text": "Okay, I can help with that, Marcus. Can I verify the account email first?" },
+      { "line": 4, "speaker": "Marcus", "text": "It's marcus@fieldnotecreative.com." },
+      { "line": 5, "speaker": "Elena", "text": "Got it, I have your account here. Before I process anything — would you mind telling me what's driving the decision?" },
+      { "line": 6, "speaker": "Marcus", "text": "Honestly? Price. Our renewal notice came through last week and the price has gone up thirty percent. That's a big jump for a fifteen-person agency." },
+      { "line": 7, "speaker": "Elena", "text": "That's fair, and I appreciate you being direct about it. The thirty percent reflects the new Growth plan pricing, yes. Can I ask how your team actually uses Open Gong day to day?" },
+      { "line": 8, "speaker": "Marcus", "text": "The account managers record their client calls and use the summaries. That part works well, no complaints. But we're also paying for a bunch of things we never touch." },
+      { "line": 9, "speaker": "Elena", "text": "Which parts feel like dead weight to you?" },
+      { "line": 10, "speaker": "Marcus", "text": "The coaching scorecards, the deal pipeline view, the CRM sync — we don't use any of it. We're an agency, not a sales floor. I'd guess we use maybe half the product." },
+      { "line": 11, "speaker": "Elena", "text": "So the real value for you is recording, transcripts, and the summaries — the core call documentation." },
+      { "line": 12, "speaker": "Marcus", "text": "Exactly. And that's the other thing — a competitor called TalkTrace quoted us basically that feature set for about half of what your renewal comes to." },
+      { "line": 13, "speaker": "Elena", "text": "Do you mind sharing their number, so I'm comparing like with like?" },
+      { "line": 14, "speaker": "Marcus", "text": "They quoted two hundred and ten a month for fifteen seats. Your renewal works out to four hundred and twenty." },
+      { "line": 15, "speaker": "Elena", "text": "Thank you, that's genuinely helpful. Can I ask a couple more questions before we talk about cancelling?" },
+      { "line": 16, "speaker": "Marcus", "text": "Go ahead." },
+      { "line": 17, "speaker": "Elena", "text": "Of your fifteen seats, how many people actually record calls in a given month?" },
+      { "line": 18, "speaker": "Marcus", "text": "Probably eight or nine. The design side barely logs in." },
+      { "line": 19, "speaker": "Elena", "text": "Okay. And the summaries your account managers rely on — are those internal, or do they go to clients?" },
+      { "line": 20, "speaker": "Marcus", "text": "Both. The client-facing recaps are honestly the main reason we've kept it this long. Clients love them." },
+      { "line": 21, "speaker": "Elena", "text": "That's useful to know. Here's why I'm asking — it sounds to me like you're on the wrong plan more than the wrong product. Growth bundles all the sales features you just listed as dead weight." },
+      { "line": 22, "speaker": "Marcus", "text": "Well, it was the plan we were put on two years ago. Nobody's reviewed it since." },
+      { "line": 23, "speaker": "Elena", "text": "Right, and that's on us as much as anyone. There's a Core plan now — just recording, transcription, and summaries. It launched in the spring, so it didn't exist when you signed up." },
+      { "line": 24, "speaker": "Marcus", "text": "Nobody has ever mentioned a Core plan to me." },
+      { "line": 25, "speaker": "Elena", "text": "You're not the first person to say that this month. On Core, fifteen seats would come to two hundred and fifty-five a month. If we trimmed you to ten seats — covering the people who actually record — it's one hundred and seventy a month." },
+      { "line": 26, "speaker": "Marcus", "text": "One seventy. That's less than the TalkTrace quote." },
+      { "line": 27, "speaker": "Elena", "text": "It is. And you'd keep everything the team already has — your call history, your client recap templates, your integration settings. Moving tools means re-training your account managers and starting the archive from zero." },
+      { "line": 28, "speaker": "Marcus", "text": "Losing the history would sting, I'll give you that. We have about two years of client calls in there." },
+      { "line": 29, "speaker": "Elena", "text": "Two years of searchable client conversations is not a small thing to walk away from. Can I ask — is the decision final on your side, or is there a version of this where you stay?" },
+      { "line": 30, "speaker": "Marcus", "text": "I'll be straight with you: I came into this call planning to cancel today. The thirty percent increase with no warning really annoyed me. It felt like being taken for granted." },
+      { "line": 31, "speaker": "Elena", "text": "I hear you, and I'm sorry it landed that way. For what it's worth, that feedback goes to our pricing team — the renewal comms this cycle were not our best work." },
+      { "line": 32, "speaker": "Marcus", "text": "Appreciated. Look, it's not personal, it's budget. We're fifteen people and every line item is under review this quarter." },
+      { "line": 33, "speaker": "Elena", "text": "Understood. So let me put two concrete options on the table. Option one: downgrade to Core at ten seats for one hundred and seventy a month, and you keep your whole archive. Option two: if you'd rather keep the full Growth feature set, I can apply a twenty percent renewal discount for the year, which brings it to three hundred and thirty-six a month." },
+      { "line": 34, "speaker": "Marcus", "text": "The Core option sounds a lot closer to what we actually need." },
+      { "line": 35, "speaker": "Elena", "text": "That was my read too." },
+      { "line": 36, "speaker": "Marcus", "text": "But I'm not deciding on this call. I want to see the comparison in writing, and I need to run it past my ops lead — she manages the account managers day to day." },
+      { "line": 37, "speaker": "Elena", "text": "Completely reasonable. What would the comparison need to cover for it to be useful to her?" },
+      { "line": 38, "speaker": "Marcus", "text": "Exactly what we lose going from Growth to Core, feature by feature. And specifically — if the client recap templates don't survive the downgrade, this whole conversation is moot." },
+      { "line": 39, "speaker": "Elena", "text": "The recap templates do carry over — they're part of Core, not a Growth add-on. But I'll put that in writing in the comparison so you're not just taking my word for it." },
+      { "line": 40, "speaker": "Marcus", "text": "Good. Now, what about the renewal date? We renew on the twenty-eighth, and I don't want to get auto-billed at the new rate while I'm still thinking." },
+      { "line": 41, "speaker": "Elena", "text": "Fair. I'm placing a hold on your auto-renewal right now, so nothing bills on the twenty-eighth while you decide." },
+      { "line": 42, "speaker": "Marcus", "text": "Okay. That helps." },
+      { "line": 43, "speaker": "Elena", "text": "And I'll hold both offers — the Core pricing at one seventy and the twenty percent Growth discount — until the twenty-seventh. That gives you a full week to decide with the real numbers in front of you." },
+      { "line": 44, "speaker": "Marcus", "text": "A week is enough. What are you thinking, a call same time next week?" },
+      { "line": 45, "speaker": "Elena", "text": "Next Thursday at this time works on my end. I'll send the comparison document tomorrow morning so you and your ops lead have it well before we talk." },
+      { "line": 46, "speaker": "Marcus", "text": "Alright, book it. But Elena, I want to be clear — if the numbers don't work or the downgrade drops something we need, we're going with TalkTrace. This isn't a soft maybe." },
+      { "line": 47, "speaker": "Elena", "text": "Understood, and I'd rather you make that call with the real numbers in front of you than cancel today off a renewal letter. If Core doesn't fit, I'll process the cancellation myself on Thursday, no run-around." },
+      { "line": 48, "speaker": "Marcus", "text": "That's fair. I can work with that." },
+      { "line": 49, "speaker": "Elena", "text": "While I have you — is there anything else that's been bugging the team about the product? If I'm sending feedback up, I'd rather send the full picture." },
+      { "line": 50, "speaker": "Marcus", "text": "Honestly, the product itself has been fine. The mobile app is clunky, but that's a nitpick. This is a pricing conversation, not a product one." },
+      { "line": 51, "speaker": "Elena", "text": "Noted on the mobile app — that one does come up, and there's a rebuild in progress. Anything else on the billing or account side?" },
+      { "line": 52, "speaker": "Marcus", "text": "No, the rest is fine. It really is just the money." },
+      { "line": 53, "speaker": "Elena", "text": "Okay. Let me recap so we're aligned. Your auto-renewal is on hold, so there's no charge on the twenty-eighth. I send you the Growth-to-Core comparison tomorrow morning, including written confirmation that the recap templates carry over. Both offers stand until the twenty-seventh. And we talk next Thursday at this same time." },
+      { "line": 54, "speaker": "Marcus", "text": "That matches what I've got written down." },
+      { "line": 55, "speaker": "Elena", "text": "Perfect. And Marcus — thank you for giving this a week instead of walking today. Genuinely." },
+      { "line": 56, "speaker": "Marcus", "text": "Well, you earned the week. Most cancellation calls are twenty minutes of hold music and a survey at the end." },
+      { "line": 57, "speaker": "Elena", "text": "We try to do a bit better than that. You'll have the document in your inbox tomorrow morning. Anything else I can do for you today?" },
+      { "line": 58, "speaker": "Marcus", "text": "No, that covers it." },
+      { "line": 59, "speaker": "Elena", "text": "Great. Talk next Thursday, Marcus." },
+      { "line": 60, "speaker": "Marcus", "text": "Talk then. Thanks, Elena. Bye." }
+    ]
+  },
+  "insights": {
+    "intent": {
+      "value": "support",
+      "confidence": 0.94,
+      "evidence": [
+        { "quote": "I'm calling to cancel our subscription.", "line": 2 }
+      ]
+    },
+    "summary": [
+      {
+        "text": "Marcus, founder of the 15-person agency Fieldnote Creative, called intending to cancel after a 30% renewal price increase arrived with no warning.",
+        "evidence": [
+          { "quote": "Our renewal notice came through last week and the price has gone up thirty percent. That's a big jump for a fifteen-person agency.", "line": 6 },
+          { "quote": "I came into this call planning to cancel today. The thirty percent increase with no warning really annoyed me.", "line": 30 }
+        ]
+      },
+      {
+        "text": "The team uses only the core call-documentation features — roughly half the product — and competitor TalkTrace quoted $210/month against a $420/month renewal.",
+        "evidence": [
+          { "quote": "we don't use any of it. We're an agency, not a sales floor. I'd guess we use maybe half the product.", "line": 10 },
+          { "quote": "They quoted two hundred and ten a month for fifteen seats. Your renewal works out to four hundred and twenty.", "line": 14 }
+        ]
+      },
+      {
+        "text": "Elena offered two saves: a Core downgrade at ten seats for $170/month (undercutting the TalkTrace quote, with history and recap templates retained) or a 20% renewal discount on Growth.",
+        "evidence": [
+          { "quote": "If we trimmed you to ten seats — covering the people who actually record — it's one hundred and seventy a month.", "line": 25 },
+          { "quote": "I can apply a twenty percent renewal discount for the year, which brings it to three hundred and thirty-six a month", "line": 33 },
+          { "quote": "The recap templates do carry over — they're part of Core, not a Growth add-on.", "line": 39 }
+        ]
+      },
+      {
+        "text": "Marcus agreed to a one-week decision window instead of cancelling on the call, but the churn risk is explicit and unresolved — he will move to TalkTrace if the downgrade doesn't fit.",
+        "evidence": [
+          { "quote": "A week is enough.", "line": 44 },
+          { "quote": "if the numbers don't work or the downgrade drops something we need, we're going with TalkTrace. This isn't a soft maybe.", "line": 46 }
+        ]
+      }
+    ],
+    "objections": [
+      {
+        "label": "renewal price increase",
+        "detail": "The renewal came in 30% higher with no warning, which Marcus read as being taken for granted; every budget line at the agency is under review this quarter.",
+        "status": "open — countered with a 20% renewal discount and a downgrade path, decision deferred one week",
+        "evidence": [
+          { "quote": "the price has gone up thirty percent", "line": 6 },
+          { "quote": "The thirty percent increase with no warning really annoyed me. It felt like being taken for granted.", "line": 30 }
+        ]
+      },
+      {
+        "label": "cheaper competitor quote",
+        "detail": "TalkTrace quoted $210/month for fifteen seats for the feature set Fieldnote actually uses, versus a $420/month Open Gong renewal.",
+        "status": "countered — Core at ten seats is $170/month, below the TalkTrace quote, but not yet accepted",
+        "evidence": [
+          { "quote": "a competitor called TalkTrace quoted us basically that feature set for about half of what your renewal comes to", "line": 12 },
+          { "quote": "They quoted two hundred and ten a month for fifteen seats.", "line": 14 }
+        ]
+      },
+      {
+        "label": "paying for unused features",
+        "detail": "Coaching scorecards, deal pipeline, and CRM sync go unused; the agency estimates it uses maybe half the product it pays for.",
+        "status": "addressed — Core plan drops the unused sales bundle, pending written feature comparison",
+        "evidence": [
+          { "quote": "The coaching scorecards, the deal pipeline view, the CRM sync — we don't use any of it.", "line": 10 }
+        ]
+      }
+    ],
+    "next_steps": [
+      {
+        "text": "Elena sends the Growth-to-Core feature comparison tomorrow morning, including written confirmation that the client recap templates carry over.",
+        "owner": "Elena",
+        "evidence": [
+          { "quote": "I'll send the comparison document tomorrow morning so you and your ops lead have it well before we talk.", "line": 45 },
+          { "quote": "I'll put that in writing in the comparison so you're not just taking my word for it", "line": 39 }
+        ]
+      },
+      {
+        "text": "Follow-up call booked for next Thursday at the same time, where Marcus decides between the Core downgrade, the discounted Growth renewal, or cancellation.",
+        "owner": "Elena",
+        "evidence": [
+          { "quote": "Next Thursday at this time works on my end.", "line": 45 },
+          { "quote": "If Core doesn't fit, I'll process the cancellation myself on Thursday, no run-around.", "line": 47 }
+        ]
+      },
+      {
+        "text": "Both offers — Core at $170/month for ten seats and the 20% Growth discount — are held until the twenty-seventh.",
+        "owner": "Elena",
+        "evidence": [
+          { "quote": "I'll hold both offers — the Core pricing at one seventy and the twenty percent Growth discount — until the twenty-seventh.", "line": 43 }
+        ]
+      },
+      {
+        "text": "Auto-renewal placed on hold so the account is not billed at the new rate on the twenty-eighth while the decision is pending.",
+        "owner": "Elena",
+        "evidence": [
+          { "quote": "I'm placing a hold on your auto-renewal right now, so nothing bills on the twenty-eighth while you decide.", "line": 41 }
+        ]
+      }
+    ],
+    "follow_up_email": null,
+    "scorecard": {
+      "pack": "support-default",
+      "pack_version": 1,
+      "fields": [
+        {
+          "name": "recording_disclosure",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "this call is recorded for quality purposes", "line": 1 }
+          ]
+        },
+        {
+          "name": "issue_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Honestly? Price. Our renewal notice came through last week and the price has gone up thirty percent.", "line": 6 }
+          ]
+        },
+        {
+          "name": "resolution_provided",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Option one: downgrade to Core at ten seats for one hundred and seventy a month, and you keep your whole archive. Option two: if you'd rather keep the full Growth feature set, I can apply a twenty percent renewal discount for the year", "line": 33 }
+          ]
+        },
+        {
+          "name": "timeline_communicated",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "I'll hold both offers — the Core pricing at one seventy and the twenty percent Growth discount — until the twenty-seventh. That gives you a full week to decide", "line": 43 }
+          ]
+        },
+        {
+          "name": "churn_risk_flagged",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "I came into this call planning to cancel today.", "line": 30 },
+            { "quote": "we're going with TalkTrace. This isn't a soft maybe.", "line": 46 }
+          ]
+        },
+        {
+          "name": "empathy_and_tone",
+          "kind": "judgment",
+          "score": 4,
+          "max_score": 5,
+          "justification": "Elena acknowledged the frustration directly, apologized for the renewal communication, and respected the customer's need to decide with his ops lead rather than pressuring for a same-call save. Slightly slow to acknowledge the emotional side — the first several minutes were diagnostic before the apology landed.",
+          "evidence": [
+            { "quote": "I hear you, and I'm sorry it landed that way. For what it's worth, that feedback goes to our pricing team — the renewal comms this cycle were not our best work.", "line": 31 },
+            { "quote": "Completely reasonable. What would the comparison need to cover for it to be useful to her?", "line": 37 }
+          ]
+        },
+        {
+          "name": "resolution_quality",
+          "kind": "judgment",
+          "score": 4,
+          "max_score": 5,
+          "justification": "Strong save attempt: usage-based diagnosis led to a downgrade that undercuts the competitor quote, backed by a renewal hold, held pricing with a deadline, and a booked decision call. Not a 5 because the churn risk is real and unresolved — the outcome hinges on the comparison document and the ops lead's review.",
+          "evidence": [
+            { "quote": "I'm placing a hold on your auto-renewal right now, so nothing bills on the twenty-eighth while you decide.", "line": 41 },
+            { "quote": "I send you the Growth-to-Core comparison tomorrow morning, including written confirmation that the recap templates carry over. Both offers stand until the twenty-seventh.", "line": 53 }
+          ]
+        }
+      ]
+    }
+  },
+  "compliance": null
+}

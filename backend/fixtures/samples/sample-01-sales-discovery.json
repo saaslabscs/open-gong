@@ -1,0 +1,199 @@
+{
+  "call": {
+    "id": "sample-01",
+    "title": "Discovery call — Brightline Logistics",
+    "source": "sample",
+    "duration_s": 342,
+    "recorded_at": "2026-07-14T15:00:00Z",
+    "participants": ["Maya (AE, Open Gong)", "Daniel (VP Ops, Brightline)"]
+  },
+  "run": {
+    "status": "shipped",
+    "stages": [
+      { "name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.011, "error": null },
+      { "name": "detect_intent", "status": "ok", "attempts": 1, "cost_usd": 0.002, "error": null },
+      { "name": "extract", "status": "ok", "attempts": 1, "cost_usd": 0.019, "error": null },
+      { "name": "validate", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": null, "dropped_claims": 0 },
+      { "name": "score", "status": "ok", "attempts": 1, "cost_usd": 0.008, "error": null },
+      { "name": "compose_email", "status": "ok", "attempts": 1, "cost_usd": 0.004, "error": null }
+    ]
+  },
+  "transcript": {
+    "language": "en",
+    "lines": [
+      { "line": 1, "speaker": "Maya", "text": "Hi Daniel, thanks for making the time. Before we start — this call is being recorded for note-taking, is that okay with you?" },
+      { "line": 2, "speaker": "Daniel", "text": "Yeah, that's fine." },
+      { "line": 3, "speaker": "Maya", "text": "Great. So when we spoke briefly at the expo you mentioned your team spends a lot of time writing up customer calls. Can you walk me through how that works today?" },
+      { "line": 4, "speaker": "Daniel", "text": "Sure. We've got eleven account managers, and after every customer call they're supposed to log notes in the CRM. In practice maybe half of it gets logged, and what does get logged is inconsistent." },
+      { "line": 5, "speaker": "Maya", "text": "When you say inconsistent — what's the actual cost of that for you?" },
+      { "line": 6, "speaker": "Daniel", "text": "Two things. Handovers are painful — when an AM leaves or is out, whoever picks up the account is flying blind. And my QBR prep takes me a full day because I'm chasing people for what actually happened on their accounts." },
+      { "line": 7, "speaker": "Maya", "text": "Got it. And is fixing this something you're actively looking at this quarter, or more of a background annoyance?" },
+      { "line": 8, "speaker": "Daniel", "text": "It's active. My COO flagged call documentation in our ops review in June. I've been asked to bring a proposal to the leadership meeting in September." },
+      { "line": 9, "speaker": "Maya", "text": "Okay, that's useful. Who besides you and the COO would weigh in on a decision like this?" },
+      { "line": 10, "speaker": "Daniel", "text": "IT security would need to review anything that touches customer data. And finance signs off on anything over ten thousand a year." },
+      { "line": 11, "speaker": "Maya", "text": "Is ten thousand roughly the zone you'd expect a tool like this to land in, or do you have a number in mind?" },
+      { "line": 12, "speaker": "Daniel", "text": "Honestly I budgeted around fifteen thousand a year for this in the proposal draft. If it's meaningfully above that it gets harder." },
+      { "line": 13, "speaker": "Maya", "text": "That's workable. Let me show you how the call notes look — every claim in the summary links back to the exact line in the transcript, so your AMs can verify before anything goes to the CRM." },
+      { "line": 14, "speaker": "Daniel", "text": "That's actually important. We had a bad experience with an AI notetaker that made things up. One wrong number in a customer note caused a real mess with a client last year." },
+      { "line": 15, "speaker": "Maya", "text": "That's exactly the problem we built around — if there's no supporting line in the transcript, the claim doesn't ship. It gets dropped and flagged instead." },
+      { "line": 16, "speaker": "Daniel", "text": "Okay. My main concern after that is security review. Customer call recordings are sensitive — where does the audio live, and who can see it?" },
+      { "line": 17, "speaker": "Maya", "text": "Fair question. I'll send you our security overview and data retention docs today so IT can start early. Recordings are deletable on demand and we can walk your team through the architecture." },
+      { "line": 18, "speaker": "Daniel", "text": "Send that over. If security is comfortable, I'd want to pilot with three AMs before September." },
+      { "line": 19, "speaker": "Maya", "text": "Let's do that. So next steps: I send the security docs today, we set up a pilot with three of your AMs in August, and I'll put together pricing that fits the fifteen thousand envelope. Can we book thirty minutes next Thursday to review the pilot plan?" },
+      { "line": 20, "speaker": "Daniel", "text": "Thursday works. Morning if possible." },
+      { "line": 21, "speaker": "Maya", "text": "Thursday morning it is. Thanks Daniel — you'll have the docs in your inbox this afternoon." }
+    ]
+  },
+  "insights": {
+    "intent": {
+      "value": "sales",
+      "confidence": 0.97,
+      "evidence": [
+        { "quote": "I've been asked to bring a proposal to the leadership meeting in September.", "line": 8 }
+      ]
+    },
+    "summary": [
+      {
+        "text": "Brightline's 11 account managers log roughly half their customer calls, and what is logged is inconsistent.",
+        "evidence": [
+          { "quote": "We've got eleven account managers, and after every customer call they're supposed to log notes in the CRM. In practice maybe half of it gets logged", "line": 4 }
+        ]
+      },
+      {
+        "text": "The pain is executive-visible: the COO flagged call documentation in a June ops review, and Daniel must present a proposal to leadership in September.",
+        "evidence": [
+          { "quote": "My COO flagged call documentation in our ops review in June.", "line": 8 },
+          { "quote": "I've been asked to bring a proposal to the leadership meeting in September.", "line": 8 }
+        ]
+      },
+      {
+        "text": "Budget is drafted at ~$15k/year; finance sign-off is required above $10k/year and IT security must review anything touching customer data.",
+        "evidence": [
+          { "quote": "Honestly I budgeted around fifteen thousand a year for this in the proposal draft.", "line": 12 },
+          { "quote": "IT security would need to review anything that touches customer data. And finance signs off on anything over ten thousand a year.", "line": 10 }
+        ]
+      },
+      {
+        "text": "Daniel wants a 3-AM pilot in August, contingent on security review passing.",
+        "evidence": [
+          { "quote": "If security is comfortable, I'd want to pilot with three AMs before September.", "line": 18 }
+        ]
+      }
+    ],
+    "objections": [
+      {
+        "label": "trust in AI accuracy",
+        "detail": "A previous AI notetaker fabricated content; one wrong number in a customer note caused a client incident last year.",
+        "status": "addressed",
+        "evidence": [
+          { "quote": "We had a bad experience with an AI notetaker that made things up.", "line": 14 }
+        ]
+      },
+      {
+        "label": "data security",
+        "detail": "Customer call recordings are sensitive; IT needs to know where audio lives and who can access it.",
+        "status": "open — docs promised",
+        "evidence": [
+          { "quote": "Customer call recordings are sensitive — where does the audio live, and who can see it?", "line": 16 }
+        ]
+      }
+    ],
+    "next_steps": [
+      {
+        "text": "Maya sends security overview and data-retention docs today.",
+        "owner": "Maya",
+        "evidence": [
+          { "quote": "I'll send you our security overview and data retention docs today", "line": 17 }
+        ]
+      },
+      {
+        "text": "Book 30 minutes Thursday morning to review the pilot plan.",
+        "owner": "Maya",
+        "evidence": [
+          { "quote": "Can we book thirty minutes next Thursday to review the pilot plan?", "line": 19 },
+          { "quote": "Thursday works. Morning if possible.", "line": 20 }
+        ]
+      },
+      {
+        "text": "Set up an August pilot with three account managers, pending security review.",
+        "owner": "Maya",
+        "evidence": [
+          { "quote": "we set up a pilot with three of your AMs in August", "line": 19 }
+        ]
+      }
+    ],
+    "follow_up_email": {
+      "subject": "Security docs + Thursday pilot review — Open Gong x Brightline",
+      "body": "Hi Daniel,\n\nThanks for the conversation today. As promised, I've attached our security overview and data-retention documentation so your IT team can start their review early.\n\nRecapping what we agreed:\n- Pilot with three of your AMs in August, pending IT security sign-off\n- Pricing scoped to fit the ~$15k/year envelope you've drafted\n- 30 minutes Thursday morning to walk through the pilot plan — invite to follow\n\nOne thing that stuck with me: your experience with a notetaker that invented details. That's the exact failure mode we designed against — every claim in our notes links to the specific line in the transcript, and anything without proof gets dropped, not shipped.\n\nTalk Thursday,\nMaya"
+    },
+    "scorecard": {
+      "pack": "sales-default",
+      "pack_version": 1,
+      "fields": [
+        {
+          "name": "recording_disclosure",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "this call is being recorded for note-taking, is that okay with you?", "line": 1 }
+          ]
+        },
+        {
+          "name": "budget_discussed",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Honestly I budgeted around fifteen thousand a year for this in the proposal draft.", "line": 12 }
+          ]
+        },
+        {
+          "name": "decision_process_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "IT security would need to review anything that touches customer data. And finance signs off on anything over ten thousand a year.", "line": 10 }
+          ]
+        },
+        {
+          "name": "timeline_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "I've been asked to bring a proposal to the leadership meeting in September.", "line": 8 }
+          ]
+        },
+        {
+          "name": "next_step_secured",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "Thursday works. Morning if possible.", "line": 20 }
+          ]
+        },
+        {
+          "name": "discovery_quality",
+          "kind": "judgment",
+          "score": 5,
+          "max_score": 5,
+          "justification": "Maya quantified the pain (handover blindness, full-day QBR prep), established urgency (COO mandate, September deadline), surfaced the full buying committee, and anchored budget — all with open questions rather than pitching.",
+          "evidence": [
+            { "quote": "When you say inconsistent — what's the actual cost of that for you?", "line": 5 },
+            { "quote": "Who besides you and the COO would weigh in on a decision like this?", "line": 9 }
+          ]
+        },
+        {
+          "name": "objection_handling",
+          "kind": "judgment",
+          "score": 4,
+          "max_score": 5,
+          "justification": "The accuracy objection was answered directly with the product's evidence gate. The security objection was acknowledged with a concrete same-day action, though no security specifics were given on the call itself.",
+          "evidence": [
+            { "quote": "if there's no supporting line in the transcript, the claim doesn't ship.", "line": 15 },
+            { "quote": "I'll send you our security overview and data retention docs today", "line": 17 }
+          ]
+        }
+      ]
+    }
+  },
+  "compliance": null
+}

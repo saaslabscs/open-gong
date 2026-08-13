@@ -1,0 +1,233 @@
+{
+  "call": {
+    "id": "sample-03",
+    "title": "Support call — Hartley & Co double-charge",
+    "source": "sample",
+    "duration_s": 310,
+    "recorded_at": "2026-07-21T13:40:00Z",
+    "participants": ["Sam (Support, Open Gong)", "Rachel (Office Manager, Hartley & Co)"]
+  },
+  "run": {
+    "status": "shipped",
+    "stages": [
+      { "name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.01, "error": null },
+      { "name": "detect_intent", "status": "ok", "attempts": 1, "cost_usd": 0.002, "error": null },
+      { "name": "extract", "status": "ok", "attempts": 1, "cost_usd": 0.017, "error": null },
+      { "name": "validate", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": null, "dropped_claims": 0 },
+      { "name": "score", "status": "ok", "attempts": 1, "cost_usd": 0.007, "error": null },
+      { "name": "compose_email", "status": "ok", "attempts": 1, "cost_usd": 0.004, "error": null }
+    ]
+  },
+  "transcript": {
+    "language": "en",
+    "lines": [
+      { "line": 1, "speaker": "Sam", "text": "Thank you for calling Open Gong support, this is Sam speaking. Quick heads-up before we start — this call is recorded for quality and training purposes. What can I help you with today?" },
+      { "line": 2, "speaker": "Rachel", "text": "Hi Sam. My name is Rachel, I'm the office manager at Hartley & Co. I'm calling because we've been charged twice on our latest invoice." },
+      { "line": 3, "speaker": "Sam", "text": "I'm sorry to hear that, Rachel. Let's get it sorted. Can I start with the email address on the account?" },
+      { "line": 4, "speaker": "Rachel", "text": "It's billing@hartleyco.com." },
+      { "line": 5, "speaker": "Sam", "text": "Thanks. And can you confirm the company name on the account, just for verification?" },
+      { "line": 6, "speaker": "Rachel", "text": "Hartley & Co. We're an accounting firm, if that helps you find us." },
+      { "line": 7, "speaker": "Sam", "text": "Perfect, that matches what I have. Now, tell me about the charges — when did they come through?" },
+      { "line": 8, "speaker": "Rachel", "text": "Both on Monday the tenth. Two separate charges, four hundred and eighty dollars each, a few minutes apart." },
+      { "line": 9, "speaker": "Sam", "text": "Two charges of four hundred and eighty on the tenth. Let me pull up your billing history — bear with me for a moment." },
+      { "line": 10, "speaker": "Rachel", "text": "No problem. I've got the bank statement open in front of me if you need reference numbers." },
+      { "line": 11, "speaker": "Sam", "text": "That may come in handy. Okay, I have your account up... and yes, I can see two payments processed on the tenth." },
+      { "line": 12, "speaker": "Rachel", "text": "So it's not just something odd on our statement. Good, I was starting to doubt myself." },
+      { "line": 13, "speaker": "Sam", "text": "No, you're right — there are definitely two charges on our side as well. Let me dig into what generated the second one." },
+      { "line": 14, "speaker": "Rachel", "text": "Please do. And I'll be honest with you, Sam — this is the second billing issue this year. In February an invoice went out with the wrong seat count and it took two weeks to get corrected." },
+      { "line": 15, "speaker": "Sam", "text": "I'm really sorry about that, and I completely understand the frustration of it happening again. My goal is to have this fully resolved before we hang up, not in two weeks." },
+      { "line": 16, "speaker": "Rachel", "text": "That would be a very welcome change." },
+      { "line": 17, "speaker": "Sam", "text": "While I'm looking — did anyone on your side make changes to the plan recently?" },
+      { "line": 18, "speaker": "Rachel", "text": "Yes, actually. Our director upgraded us from the Team plan to the Business plan last week, so we could add the new hires." },
+      { "line": 19, "speaker": "Sam", "text": "That lines up with what I'm seeing. The upgrade went through on the ninth. Give me one more minute here." },
+      { "line": 20, "speaker": "Rachel", "text": "Sure, take your time." },
+      { "line": 21, "speaker": "Sam", "text": "Okay, found it. When the upgrade was processed, the system created a brand new subscription for the Business plan but never closed out your old Team subscription. So on the tenth, both subscriptions billed at the same time. That's your double charge." },
+      { "line": 22, "speaker": "Rachel", "text": "So we were being billed for two plans at once?" },
+      { "line": 23, "speaker": "Sam", "text": "For this one cycle, yes. The duplicate was only created on the ninth, so this is the first and only time it billed. It's clearly an error on our side, and it's straightforward to fix." },
+      { "line": 24, "speaker": "Rachel", "text": "Okay. So what happens now?" },
+      { "line": 25, "speaker": "Sam", "text": "Two things, and I'm doing both right now. First, I'm cancelling the duplicate Team subscription so it can never bill you again. Second, I'm issuing a full refund of four hundred and eighty dollars for the duplicate charge." },
+      { "line": 26, "speaker": "Rachel", "text": "And the Business plan we actually want stays untouched?" },
+      { "line": 27, "speaker": "Sam", "text": "Exactly — your Business plan is unaffected. Only the leftover Team subscription is being removed." },
+      { "line": 28, "speaker": "Rachel", "text": "Good. How long will the refund take? Our accountant closes the books at the end of the month." },
+      { "line": 29, "speaker": "Sam", "text": "The refund is submitted on our side today, and it typically lands back on your card within five to seven business days, depending on your bank." },
+      { "line": 30, "speaker": "Rachel", "text": "Five to seven business days — that's before month-end, so that works." },
+      { "line": 31, "speaker": "Sam", "text": "It should be with you well before then. Alright, the duplicate subscription is now cancelled, and the refund has been submitted. It will show up as a credit from Open Gong on the same card that was charged." },
+      { "line": 32, "speaker": "Rachel", "text": "Will I get something in writing? My accountant is going to want a paper trail for this." },
+      { "line": 33, "speaker": "Sam", "text": "Absolutely. I'll send a confirmation email to billing@hartleyco.com within the hour, with the refund reference number and the cancellation details for the duplicate subscription." },
+      { "line": 34, "speaker": "Rachel", "text": "Perfect. That's exactly what I need." },
+      { "line": 35, "speaker": "Sam", "text": "One more thing, Rachel. Given this is the second billing problem you've dealt with this year, I'd like to apply a fifty dollar credit to your account for the inconvenience. It will come off your next invoice automatically." },
+      { "line": 36, "speaker": "Rachel", "text": "Oh — well, that's appreciated. You didn't have to do that." },
+      { "line": 37, "speaker": "Sam", "text": "It's the least we can do. I'm also adding a note so our billing team double-checks your next invoice before it goes out." },
+      { "line": 38, "speaker": "Rachel", "text": "That does give me some peace of mind, honestly." },
+      { "line": 39, "speaker": "Sam", "text": "Let me recap so we're on the same page. The duplicate Team subscription is cancelled. A refund of four hundred and eighty dollars is on its way and should arrive within five to seven business days. A fifty dollar credit will appear on your next invoice. And a confirmation email with the refund reference is coming to you within the hour." },
+      { "line": 40, "speaker": "Rachel", "text": "That covers everything. Honestly, this went a lot smoother than the last time." },
+      { "line": 41, "speaker": "Sam", "text": "I'm glad to hear that. Is there anything else I can help you with while I have you?" },
+      { "line": 42, "speaker": "Rachel", "text": "No, that was the only thing. Thank you for sorting it so quickly, Sam." },
+      { "line": 43, "speaker": "Sam", "text": "You're very welcome. One last thing — if the refund hasn't appeared after seven business days, just reply to the confirmation email and I'll chase it with our payment processor directly." },
+      { "line": 44, "speaker": "Rachel", "text": "Will do. Thanks again." },
+      { "line": 45, "speaker": "Sam", "text": "Thank you for calling, Rachel. Have a great day." },
+      { "line": 46, "speaker": "Rachel", "text": "You too. Bye." }
+    ]
+  },
+  "insights": {
+    "intent": {
+      "value": "support",
+      "confidence": 0.98,
+      "evidence": [
+        { "quote": "I'm calling because we've been charged twice on our latest invoice.", "line": 2 }
+      ]
+    },
+    "summary": [
+      {
+        "text": "Hartley & Co was charged $480 twice on the tenth; the root cause was a plan upgrade on the ninth that created a new Business subscription without closing the old Team subscription.",
+        "evidence": [
+          { "quote": "Both on Monday the tenth. Two separate charges, four hundred and eighty dollars each, a few minutes apart.", "line": 8 },
+          { "quote": "the system created a brand new subscription for the Business plan but never closed out your old Team subscription", "line": 21 }
+        ]
+      },
+      {
+        "text": "Sam cancelled the duplicate Team subscription and refunded the $480 duplicate charge on the call; the active Business plan was left untouched.",
+        "evidence": [
+          { "quote": "I'm cancelling the duplicate Team subscription so it can never bill you again. Second, I'm issuing a full refund of four hundred and eighty dollars for the duplicate charge.", "line": 25 },
+          { "quote": "your Business plan is unaffected. Only the leftover Team subscription is being removed.", "line": 27 }
+        ]
+      },
+      {
+        "text": "The refund was confirmed at five to seven business days, which lands before the customer's month-end book close.",
+        "evidence": [
+          { "quote": "it typically lands back on your card within five to seven business days", "line": 29 },
+          { "quote": "Five to seven business days — that's before month-end, so that works.", "line": 30 }
+        ]
+      },
+      {
+        "text": "Because this was the customer's second billing issue this year, Sam applied a $50 goodwill credit and flagged the account for a manual check on the next invoice.",
+        "evidence": [
+          { "quote": "this is the second billing issue this year", "line": 14 },
+          { "quote": "I'd like to apply a fifty dollar credit to your account for the inconvenience", "line": 35 },
+          { "quote": "I'm also adding a note so our billing team double-checks your next invoice before it goes out.", "line": 37 }
+        ]
+      }
+    ],
+    "objections": [
+      {
+        "label": "repeat billing problems",
+        "detail": "This is the second billing issue this year; a February invoice had the wrong seat count and took two weeks to correct, so trust in billing accuracy is strained.",
+        "status": "addressed — resolved on-call, credit applied, account flagged for invoice review",
+        "evidence": [
+          { "quote": "this is the second billing issue this year. In February an invoice went out with the wrong seat count and it took two weeks to get corrected.", "line": 14 }
+        ]
+      },
+      {
+        "label": "refund timing vs month-end close",
+        "detail": "The accountant closes the books at month-end, so the refund needed to land before then.",
+        "status": "addressed — 5-7 business day timeline confirmed, arrives before close",
+        "evidence": [
+          { "quote": "How long will the refund take? Our accountant closes the books at the end of the month.", "line": 28 }
+        ]
+      },
+      {
+        "label": "needs written confirmation",
+        "detail": "The accountant requires a paper trail for the refund and cancellation.",
+        "status": "addressed — confirmation email with refund reference promised within the hour",
+        "evidence": [
+          { "quote": "Will I get something in writing? My accountant is going to want a paper trail for this.", "line": 32 }
+        ]
+      }
+    ],
+    "next_steps": [
+      {
+        "text": "Refund of $480 submitted; expected on the customer's card within five to seven business days.",
+        "owner": "Sam",
+        "evidence": [
+          { "quote": "the duplicate subscription is now cancelled, and the refund has been submitted", "line": 31 },
+          { "quote": "it typically lands back on your card within five to seven business days", "line": 29 }
+        ]
+      },
+      {
+        "text": "Sam sends a confirmation email to billing@hartleyco.com within the hour with the refund reference number and cancellation details.",
+        "owner": "Sam",
+        "evidence": [
+          { "quote": "I'll send a confirmation email to billing@hartleyco.com within the hour, with the refund reference number and the cancellation details for the duplicate subscription.", "line": 33 }
+        ]
+      },
+      {
+        "text": "A $50 goodwill credit is applied to the account and will come off the next invoice automatically.",
+        "owner": "Sam",
+        "evidence": [
+          { "quote": "I'd like to apply a fifty dollar credit to your account for the inconvenience. It will come off your next invoice automatically.", "line": 35 }
+        ]
+      }
+    ],
+    "follow_up_email": {
+      "subject": "Your refund is on its way — duplicate charge resolved (Hartley & Co)",
+      "body": "Hi Rachel,\n\nThanks for calling in today, and again, I'm sorry about the duplicate charge.\n\nHere's a written recap for your records:\n- Cause: the plan upgrade on the 9th created a second subscription that wasn't closed out, so both billed on the 10th\n- Fixed: the duplicate Team subscription is cancelled and can't bill again — your Business plan is unchanged\n- Refund: $480.00 submitted today, refund reference OG-RF-58214. It should appear on the same card within 5-7 business days, well before your month-end close\n- Credit: a $50 goodwill credit will come off your next invoice automatically\n- Extra check: I've flagged your account so our billing team reviews your next invoice before it goes out\n\nIf the refund hasn't appeared after 7 business days, just reply to this email and I'll chase it with our payment processor directly.\n\nBest,\nSam\nOpen Gong Support"
+    },
+    "scorecard": {
+      "pack": "support-default",
+      "pack_version": 1,
+      "fields": [
+        {
+          "name": "recording_disclosure",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "this call is recorded for quality and training purposes", "line": 1 }
+          ]
+        },
+        {
+          "name": "issue_identified",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "the system created a brand new subscription for the Business plan but never closed out your old Team subscription. So on the tenth, both subscriptions billed at the same time.", "line": 21 }
+          ]
+        },
+        {
+          "name": "resolution_provided",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "First, I'm cancelling the duplicate Team subscription so it can never bill you again. Second, I'm issuing a full refund of four hundred and eighty dollars for the duplicate charge.", "line": 25 }
+          ]
+        },
+        {
+          "name": "timeline_communicated",
+          "kind": "deterministic",
+          "value": true,
+          "evidence": [
+            { "quote": "it typically lands back on your card within five to seven business days, depending on your bank", "line": 29 }
+          ]
+        },
+        {
+          "name": "churn_risk_flagged",
+          "kind": "deterministic",
+          "value": false,
+          "evidence": []
+        },
+        {
+          "name": "empathy_and_tone",
+          "kind": "judgment",
+          "score": 5,
+          "max_score": 5,
+          "justification": "Sam acknowledged the history of billing problems without getting defensive, set an explicit expectation of same-call resolution, and offered an unprompted goodwill credit that directly addressed the repeat-issue frustration.",
+          "evidence": [
+            { "quote": "I'm really sorry about that, and I completely understand the frustration of it happening again. My goal is to have this fully resolved before we hang up, not in two weeks.", "line": 15 },
+            { "quote": "I'd like to apply a fifty dollar credit to your account for the inconvenience", "line": 35 }
+          ]
+        },
+        {
+          "name": "resolution_quality",
+          "kind": "judgment",
+          "score": 5,
+          "max_score": 5,
+          "justification": "Root cause was found and explained, the fix was executed during the call rather than queued, the recap covered every commitment with a timeline, and Sam added a preventive step plus a clear escalation path if the refund is late.",
+          "evidence": [
+            { "quote": "The duplicate Team subscription is cancelled. A refund of four hundred and eighty dollars is on its way and should arrive within five to seven business days.", "line": 39 },
+            { "quote": "if the refund hasn't appeared after seven business days, just reply to the confirmation email and I'll chase it with our payment processor directly", "line": 43 }
+          ]
+        }
+      ]
+    }
+  },
+  "compliance": null
+}
