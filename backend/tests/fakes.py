@@ -6,6 +6,7 @@ GOOD_SCORE: dict = {}
 GOOD_COMPLIANCE: dict = {"findings": []}
 GOOD_EMAIL = {"subject": "Follow-up", "body": "Hi — recapping our call."}
 GOOD_SKILL_OUTPUT: dict = {}
+GOOD_DISPATCH: dict = {"agent_ids": [], "reasoning": "No agents matched this call."}
 
 
 def fake_llm(responses: dict):
@@ -36,6 +37,11 @@ def fake_llm(responses: dict):
             if isinstance(r, Exception):
                 raise r
             return r, 0.01
+        if "Decide which of these agents" in user:
+            r = responses.get("dispatch", GOOD_DISPATCH)
+            if isinstance(r, Exception):
+                raise r
+            return r, 0.002
         raise AssertionError(f"unexpected prompt: {user[:80]}")
 
     return fake
