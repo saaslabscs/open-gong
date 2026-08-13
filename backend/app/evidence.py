@@ -101,3 +101,73 @@ def validate_extraction(extraction: dict, transcript_lines: list[dict]) -> tuple
             cleaned[field] = value
 
     return cleaned, dropped
+
+
+def validate_fields(fields_spec: dict, raw_output: dict, transcript_lines: list[dict]) -> tuple[dict, list[dict]]:
+    """Generalized gate over a skill's declared fields: {checks, scores, claims}.
+
+    Same "no proof, no claim" contract as validate_extraction:
+    - checks (flags): value=true REQUIRES verifying evidence (unproven "yes"
+      becomes null); value=false/null may have empty evidence.
+    - scores: always require verifying evidence; a bad score is dropped
+      entirely (not nulled — there's no meaningful "unscored" placeholder
+      the caller should render).
+    - claims (lists): items with bad evidence are removed from the list.
+
+    A field absent from raw_output is treated as absent, not an error — the
+    skill's own LLM call is responsible for completeness; this gate only
+    verifies what evidence backs whatever WAS returned.
+    """
+    lines = {l["line"]: l["text"] for l in transcript_lines}
+    cleaned: dict = {}
+    dropped: list[dict] = []
+
+    for name in fields_spec.get("checks", []):
+        if name not in raw_output:
+            continue
+        value = raw_output[name]
+        evidence = value.get("evidence", []) if isinstance(value, dict) else []
+        if isinstance(value, dict) and value.get("value") is True:
+            ok, reason = _check_evidence(evidence, lines)
+            if ok and evidence:
+                cleaned[name] = value
+            else:
+                dropped.append({"where": name, "reason": reason or "true claim without evidence"})
+                cleaned[name] = {"value": None, "evidence": []}
+        elif isinstance(value, dict):
+            ok, reason = _check_evidence(evidence, lines)
+            cleaned[name] = value if ok else {"value": value.get("value"), "evidence": []}
+            if not ok:
+                dropped.append({"where": f"{name}.evidence", "reason": reason})
+
+    for spec in fields_spec.get("scores", []):
+        name = spec["name"]
+        if name not in raw_output:
+            continue
+        value = raw_output[name]
+        evidence = value.get("evidence", []) if isinstance(value, dict) else []
+        ok, reason = _check_evidence(evidence, lines)
+        if ok and evidence:
+            cleaned[name] = value
+        else:
+            dropped.append({"where": name, "reason": reason or "score without evidence"})
+
+    for name in fields_spec.get("claims", []):
+        if name not in raw_output:
+            cleaned[name] = []
+            continue
+        items = raw_output[name] if isinstance(raw_output[name], list) else []
+        kept = []
+        for i, claim in enumerate(items):
+            evidence = claim.get("evidence", []) if isinstance(claim, dict) else []
+            ok, reason = _check_evidence(evidence, lines)
+            if ok and evidence:
+                kept.append(claim)
+            else:
+                dropped.append({"where": f"{name}[{i}]", "reason": reason or "no evidence provided"})
+        cleaned[name] = kept
+
+    if not fields_spec:
+        return dict(raw_output), []
+
+    return cleaned, dropped
