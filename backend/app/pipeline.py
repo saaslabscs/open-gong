@@ -11,7 +11,7 @@ docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, §5.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from . import orchestrator as orchestrator_mod
 from . import skill_router as skill_router_mod
@@ -117,47 +117,70 @@ def _skill_dict(skill: Skill) -> dict:
     }
 
 
-def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str, lines: list[dict]) -> None:
+def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str, lines: list[dict]) -> float:
+    """Runs one agent's routed skills to a terminal AgentRun status. Returns
+    the cost actually spent, so the caller can accumulate the run's aggregate
+    budget directly rather than re-querying (a re-query by insertion order is
+    unreliable across databases and corruptible by retry duplicates — see
+    Task 9 review finding #3).
+
+    Any unexpected failure (e.g. skill routing itself raising, not just a
+    routed skill's execution) still finalizes this AgentRun to "failed"
+    rather than leaving it stuck "running" — a zombie AgentRun would wedge
+    the aggregate status and give no signal a retry is needed. Sibling
+    agents are unaffected since this never re-raises. See Task 9 review
+    finding #2.
+    """
     with get_session() as session:
         agent_run = AgentRun(call_id=call_id, run_id=run_id, agent_id=agent.id, status="running", steps=[])
         session.add(agent_run)
         session.commit()
         agent_run_id = agent_run.id
 
-    skill_ids, router_reasoning, router_cost = skill_router_mod.route_skills(
-        lines, agent.system_prompt, [_skill_dict(s) for s in skills]
-    )
-    routed_skills = [s for s in skills if s.id in skill_ids]
+    try:
+        skill_ids, router_reasoning, router_cost = skill_router_mod.route_skills(
+            lines, agent.system_prompt, [_skill_dict(s) for s in skills]
+        )
+        routed_skills = [s for s in skills if s.id in skill_ids]
 
-    rs = new_agent_run_state([s.name for s in routed_skills])
-    output: dict = {}
-    total_cost = router_cost
+        rs = new_agent_run_state([s.name for s in routed_skills])
+        output: dict = {}
+        total_cost = router_cost
 
-    for skill in routed_skills:
-        def run_one(sk=skill):
-            cleaned, dropped, cost = executor_mod.run_skill(_skill_dict(sk), lines)
-            rs.charge(sk.name, cost)
-            rs._get(sk.name).dropped_claims = len(dropped)
-            return cleaned
+        for skill in routed_skills:
+            def run_one(sk=skill):
+                cleaned, dropped, cost = executor_mod.run_skill(_skill_dict(sk), lines)
+                rs.charge(sk.name, cost)
+                rs._get(sk.name).dropped_claims = len(dropped)
+                return cleaned
 
-        try:
-            output[skill.name] = rs.execute(skill.name, run_one)
-        except BudgetExceeded:
-            rs.skip_remaining(skill.name)
-            break
-        except StageFailed:
-            continue
+            try:
+                output[skill.name] = rs.execute(skill.name, run_one)
+            except BudgetExceeded:
+                rs.skip_remaining(skill.name)
+                break
+            except StageFailed:
+                continue
 
-    total_cost += sum(s.cost_usd for s in rs.steps)
+        total_cost += sum(s.cost_usd for s in rs.steps)
 
-    with get_session() as session:
-        agent_run = session.get(AgentRun, agent_run_id)
-        agent_run.steps = rs.as_dicts()
-        agent_run.status = rs.final_status()
-        agent_run.output = output or None
-        agent_run.cost_usd = round(total_cost, 4)
-        agent_run.finished_at = datetime.now(timezone.utc)
-        session.commit()
+        with get_session() as session:
+            agent_run = session.get(AgentRun, agent_run_id)
+            agent_run.steps = rs.as_dicts()
+            agent_run.status = rs.final_status()
+            agent_run.output = output or None
+            agent_run.cost_usd = round(total_cost, 4)
+            agent_run.finished_at = datetime.now(timezone.utc)
+            session.commit()
+        return total_cost
+    except Exception as e:  # noqa: BLE001 — reason recorded on the AgentRun, not swallowed
+        with get_session() as session:
+            agent_run = session.get(AgentRun, agent_run_id)
+            agent_run.status = "failed"
+            agent_run.error = str(e)
+            agent_run.finished_at = datetime.now(timezone.utc)
+            session.commit()
+        return 0.0
 
 
 def _aggregate_status(statuses: list[str]) -> str:
@@ -178,8 +201,43 @@ def run_insights(payload: dict) -> None:
         if call is None or call.transcript is None:
             raise ValueError(f"call {call_id} has no transcript")
         run = session.scalars(select(Run).where(Run.call_id == call_id).order_by(Run.created_at.desc())).first()
-        lines = call.transcript.lines
         run_id = run.id
+
+        # A retry (via POST /api/calls/{id}/retry) or a re-seed re-enters this
+        # handler for a Run that may already carry AgentRuns from a prior
+        # attempt. Clear them before dispatching again — otherwise duplicates
+        # accumulate: doubled exports, a stale "failed" row that keeps the
+        # aggregate status stuck "partial" forever even after a clean retry,
+        # and double-counted cost. See Task 9 review finding #1.
+        session.execute(delete(AgentRun).where(AgentRun.run_id == run_id))
+        session.commit()
+
+    try:
+        _dispatch_and_run(call_id, run_id)
+    except Exception as e:  # noqa: BLE001 — reason recorded on the Run, not swallowed
+        # An unexpected failure anywhere in dispatch/routing/execution (e.g.
+        # malformed LLM JSON the orchestrator itself doesn't guard against)
+        # must still leave the Run in a terminal state. Left "running", the
+        # call would be stuck AND un-retryable — POST /retry 409s on
+        # anything that isn't "failed" or "partial". See Task 9 review
+        # finding #2.
+        with get_session() as session:
+            run = session.get(Run, run_id)
+            if run is not None:
+                note = f"run_insights failed unexpectedly: {e}"
+                run.status = "failed"
+                run.orchestrator_reasoning = (
+                    f"{run.orchestrator_reasoning}\n\n{note}" if run.orchestrator_reasoning else note
+                )
+                run.finished_at = datetime.now(timezone.utc)
+                session.commit()
+
+
+def _dispatch_and_run(call_id: str, run_id: str) -> None:
+    with get_session() as session:
+        call = session.get(Call, call_id)
+        run = session.get(Run, run_id)
+        lines = call.transcript.lines
 
         try:
             pretty, fmt_cost = prettify_transcript(lines)
@@ -226,13 +284,11 @@ def run_insights(payload: dict) -> None:
                 f"(spent ${spent_so_far:.4f}) — remaining agents skipped"
             )
             break
-        _run_one_agent(agent, skills, call_id, run_id, lines)
-        with get_session() as session:
-            spent_so_far = round(
-                spent_so_far
-                + (session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()[-1].cost_usd),
-                4,
-            )
+        # Accumulate directly from _run_one_agent's return value — a
+        # re-query "pick the last row" is order-dependent (unreliable on
+        # Postgres, and wrong under retry duplicates). See Task 9 review
+        # finding #3.
+        spent_so_far = round(spent_so_far + _run_one_agent(agent, skills, call_id, run_id, lines), 4)
 
     with get_session() as session:
         run = session.get(Run, run_id)

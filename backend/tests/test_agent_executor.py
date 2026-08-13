@@ -179,3 +179,115 @@ def test_aggregate_budget_exceeded_skips_remaining_agents_cleanly(monkeypatch):
         assert run.status == "shipped"  # finalized cleanly, not stuck "running"
         assert "budget" in run.orchestrator_reasoning.lower()
         assert "Knowledgebase" in run.orchestrator_reasoning
+
+
+# --- Task 9 post-review fixes -----------------------------------------------
+# The three tests below cover the Important findings from the Task 9 code
+# review (retry/re-seed duplicating AgentRuns, unexpected dispatch/routing
+# failures leaving a Run or AgentRun stuck "running" forever, and the
+# order-dependent budget re-query). See task-9-report.md's "Fix report"
+# addendum.
+
+
+def test_retry_rerun_does_not_duplicate_agent_runs(monkeypatch):
+    """A retry (or a re-seed) re-enters run_insights for the same run_id.
+    Without clearing prior AgentRuns first, a second dispatched run would
+    leave two AgentRun rows per agent on one run_id — corrupting exports,
+    aggregate status, and cost accounting."""
+    call_id, agent_ids, skill_ids = _seed(["Call Summarizer"], {"Call Summarizer": ["plain-summary"]})
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: ([agent_ids["Call Summarizer"]], "Only summarizer needed.", 0.002),
+    )
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([skill_ids["plain-summary"]], "Always run.", 0.002),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A clean call."}, [], 0.01),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+    run_insights({"call_id": call_id})  # simulates retry / re-seed re-entering the same run_id
+
+    with get_session() as session:
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()
+        assert len(agent_runs) == 1  # not 2 — the prior attempt's row was cleared, not duplicated
+        assert agent_runs[0].status == "shipped"
+
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        assert run.status == "shipped"
+
+
+def test_dispatch_raising_finalizes_run_as_failed_not_stuck_running(monkeypatch):
+    """An unexpected exception from orchestrator dispatch (e.g. malformed LLM
+    JSON) must still leave the Run terminal, never stuck "running" — which
+    would also make POST /retry reject it with 409, permanently stranding
+    the call."""
+    call_id, agent_ids, skill_ids = _seed(["Call Summarizer"], {"Call Summarizer": ["plain-summary"]})
+
+    def boom(lines, agents, prompt):
+        raise ValueError("malformed LLM JSON")
+
+    monkeypatch.setattr(orchestrator_mod, "dispatch", boom)
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    with get_session() as session:
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        assert run.status == "failed"  # not stuck "running"
+        assert run.finished_at is not None
+        assert "malformed LLM JSON" in run.orchestrator_reasoning
+        # dispatch never returned, so no AgentRun was ever created
+        assert session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).first() is None
+
+
+def test_route_skills_raising_fails_only_that_agent(monkeypatch):
+    """An unexpected exception from skill routing for one agent must finalize
+    that agent's own AgentRun to "failed" (not leave it stuck "running") and
+    must not affect a sibling agent that routes cleanly."""
+    call_id, agent_ids, skill_ids = _seed(
+        ["Call Summarizer", "QA Coach"],
+        {"Call Summarizer": ["plain-summary"], "QA Coach": ["qa-rubric"]},
+    )
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: (
+            [agent_ids["Call Summarizer"], agent_ids["QA Coach"]], "Both needed.", 0.0,
+        ),
+    )
+
+    def fake_route(lines, prompt, skills):
+        names = [s["name"] for s in skills]
+        if "qa-rubric" in names:
+            raise ValueError("router returned malformed JSON")
+        return [s["id"] for s in skills], "route all", 0.0
+
+    monkeypatch.setattr(skill_router_mod, "route_skills", fake_route)
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A clean call."}, [], 0.01),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    with get_session() as session:
+        agent_runs = {ar.agent_id: ar for ar in session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()}
+        summarizer_run = agent_runs[agent_ids["Call Summarizer"]]
+        qa_run = agent_runs[agent_ids["QA Coach"]]
+        assert summarizer_run.status == "shipped"  # sibling unaffected
+        assert qa_run.status == "failed"  # not stuck "running"
+        assert qa_run.finished_at is not None
+        assert "malformed JSON" in qa_run.error
+
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        assert run.status == "partial"  # one agent shipped, one failed
