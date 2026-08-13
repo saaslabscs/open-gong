@@ -217,7 +217,7 @@ Expected: FAIL with `ImportError: cannot import name 'Agent' from 'app.models'`.
 
 - [ ] **Step 3: Add the six new tables**
 
-In `backend/app/models.py`, add after the `CrmSync` class (end of file):
+In `backend/app/models.py`, add after the `ShareLink` class (end of file — this branch, forked from `main`, has no `CrmSync` class; do not look for one):
 
 ```python
 class Agent(Base):
@@ -1543,17 +1543,18 @@ git commit -m "feat: add agent skill-router"
 - Consumes: `EntryRule`, `Call` (Task 1, existing) via a SQLAlchemy `Session`.
 - Produces: `resolve_entry_rule(session, call) -> str | None` — returns the pinned `agent_id`, or `None` if no rule matches (the common case, since this phase ships no UI to create rules).
 
-Deliberately no LLM call — a pure DB lookup, matching either the call's source or (once phone-line ingestion exists) its caller phone against configured `EntryRule` rows.
+Deliberately no LLM call — a pure DB lookup. **Scoped to `match_kind == "source"` only in this phase.** `EntryRule.match_kind` (Task 1) already allows an arbitrary string including `"phone_line"`, and the spec's data model names it as a future case — but this branch's `Call` model has no `caller_phone` column at all (phone-number ingestion is HubSpot-branch/P2 work, not merged here per Global Constraints). Matching against a column that doesn't exist would be untestable and would crash on `Call(caller_phone=...)`. Implement only the `source` branch; a later phase adds `phone_line` once `Call` actually carries a phone number.
 
 - [ ] **Step 1: Write the failing tests**
 
 Create `backend/tests/test_entry_rules.py`:
 
 ```python
-"""Entry rule resolution: bypass the orchestrator when a phone line or
-source is pinned to a specific agent (Task 8 of the agent-skill
-architecture plan). See
-docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, Non-goals.
+"""Entry rule resolution: bypass the orchestrator when a call's source is
+pinned to a specific agent (Task 8 of the agent-skill architecture plan).
+phone_line matching is deferred — see the note in the task text for why.
+See docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md
+§4, Non-goals.
 """
 
 from app.db import get_session
@@ -1569,25 +1570,11 @@ def _seed_agent() -> str:
         return agent.id
 
 
-def test_matches_call_by_phone_line():
-    agent_id = _seed_agent()
-    with get_session() as session:
-        session.add(EntryRule(match_kind="phone_line", match_value="+15550001111", agent_id=agent_id))
-        call = Call(title="t", source="upload", external_id="e1", caller_phone="+15550001111")
-        session.add(call)
-        session.commit()
-        call_id = call.id
-
-    with get_session() as session:
-        call = session.get(Call, call_id)
-        assert resolve_entry_rule(session, call) == agent_id
-
-
 def test_matches_call_by_source():
     agent_id = _seed_agent()
     with get_session() as session:
         session.add(EntryRule(match_kind="source", match_value="sample", agent_id=agent_id))
-        call = Call(title="t", source="sample", external_id="e2")
+        call = Call(title="t", source="sample", external_id="e1")
         session.add(call)
         session.commit()
         call_id = call.id
@@ -1598,8 +1585,10 @@ def test_matches_call_by_source():
 
 
 def test_no_match_returns_none():
+    agent_id = _seed_agent()
     with get_session() as session:
-        call = Call(title="t", source="upload", external_id="e3", caller_phone="+19995550000")
+        session.add(EntryRule(match_kind="source", match_value="sample", agent_id=agent_id))
+        call = Call(title="t", source="upload", external_id="e2")
         session.add(call)
         session.commit()
         call_id = call.id
@@ -1611,6 +1600,23 @@ def test_no_match_returns_none():
 
 def test_no_rules_configured_returns_none():
     with get_session() as session:
+        call = Call(title="t", source="upload", external_id="e3")
+        session.add(call)
+        session.commit()
+        call_id = call.id
+
+    with get_session() as session:
+        call = session.get(Call, call_id)
+        assert resolve_entry_rule(session, call) is None
+
+
+def test_ignores_a_phone_line_rule_it_cannot_evaluate_yet():
+    """A phone_line rule may exist in the table (the column allows it), but
+    this phase's Call has no caller_phone to match against — it must be
+    silently ignored, not crash or false-match."""
+    agent_id = _seed_agent()
+    with get_session() as session:
+        session.add(EntryRule(match_kind="phone_line", match_value="+15550001111", agent_id=agent_id))
         call = Call(title="t", source="upload", external_id="e4")
         session.add(call)
         session.commit()
@@ -1632,13 +1638,15 @@ Create `backend/app/entry_rules.py`:
 
 ```python
 """Resolve a pinned agent from EntryRule, bypassing the orchestrator call
-entirely when a call's phone line or source is already known to always
-need one specific agent. See
+entirely when a call's source is already known to always need one specific
+agent. See
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, Non-goals.
 
-No UI to create EntryRule rows exists in this phase — this module only
-implements the lookup so the executor's bypass path is ready when that UI
-lands later.
+Only match_kind == "source" is implemented in this phase — Call has no
+caller_phone column yet (that lands with the HubSpot branch in P2), so a
+phone_line rule cannot be evaluated and is silently ignored, not attempted.
+No UI to create EntryRule rows exists either — this module only implements
+the lookup so the executor's bypass path is ready when that UI lands later.
 """
 
 from sqlalchemy import select
@@ -1649,13 +1657,6 @@ from .models import Call, EntryRule
 
 def resolve_entry_rule(session: Session, call: Call) -> str | None:
     """Returns the pinned agent_id, or None if no EntryRule matches this call."""
-    if call.caller_phone:
-        rule = session.scalars(
-            select(EntryRule).where(EntryRule.match_kind == "phone_line", EntryRule.match_value == call.caller_phone)
-        ).first()
-        if rule:
-            return rule.agent_id
-
     rule = session.scalars(
         select(EntryRule).where(EntryRule.match_kind == "source", EntryRule.match_value == call.source)
     ).first()
@@ -1680,23 +1681,26 @@ git commit -m "feat: add entry rule resolution"
 
 **This is the highest-risk task in this plan** — it is the only task that touches existing, load-bearing files (`pipeline.py`, `models.py`'s `Run`, `main.py`, `api/review.py`, `api/share.py`, `render.py`, `api/ingest.py`, `scripts/seed.py`) and deletes now-superseded code. If the assigned implementer finds this too large to hold in context at once, it is acceptable to split it into two dispatches (executor + seeding first, then API/model cutover) — but both halves must land together before the suite is green again, since the schema change and the code that depends on it can't ship separately.
 
+**Note on scope vs. earlier drafts of this task:** this plan was written by reading files in the `worktree-hubspot-crm-sync` branch (which has HubSpot CRM sync merged — `Call.caller_phone`/`caller_email`, `CrmSync`, `crm_sync.py`, `adapters/crm/*`, an 8-stage `STAGES` list including `crm_sync`). This implementation actually forks from `main`, which has **none of that** — 7-stage `STAGES`, no CRM anything at all, per the Global Constraints' explicit decision to leave the HubSpot branch isolated until P2. Every step below has been corrected to match `main`'s actual current state: there is no `sync_call_to_crm`, no `CrmSync`, no `crm_sync.py`, no CRM adapter, and no CRM-related test files (`test_crm_sync_pipeline.py`/`test_crm_integration.py`/`test_crm_adapter.py`/`test_crm_content.py`/`test_models_crm.py` do not exist on this branch — do not look for them). Do not add any of that code in this task; it lands in P2 when the HubSpot branch merges.
+
 **Files:**
-- Modify: `backend/app/models.py` (remove `Run.insights`, `Run.compliance`, `Run.edited_insights`; add `Run.orchestrator_reasoning`)
-- Modify: `backend/app/pipeline.py` (rewrite `run_insights`; delete `select_pack`; keep `process_call`/`poll_transcription`/`_fail_transcribe`/`sync_call_to_crm` unchanged)
+- Modify: `backend/app/models.py` (remove `Run.pack_id`, `Run.insights`, `Run.compliance`, `Run.edited_insights`; add `Run.orchestrator_reasoning`)
+- Modify: `backend/app/pipeline.py` (rewrite `run_insights`; delete `select_pack`; keep `process_call`/`poll_transcription`/`_fail_transcribe` unchanged)
 - Modify: `backend/app/run_state.py` (delete `STAGES`, `CRITICAL_STAGES`, `RunState`, `StageResult` — superseded by `agent_runtime.py`; keep `BudgetExceeded`, `StageFailed`, `MAX_ATTEMPTS`, `max_cost_per_run`)
 - Modify: `backend/app/insights.py` (delete `detect_intent`, `extract`, `score`, `compose_email` — superseded by seeded skills executed generically; keep `prettify_transcript`, `_looks_clean`, `_transcript_text`)
 - Modify: `backend/app/api/ingest.py` (`_fresh_stages()` no longer iterates `STAGES`)
 - Modify: `backend/app/main.py` (`GET /api/calls`, `GET /api/calls/{id}` read from `AgentRun`)
 - Modify: `backend/app/api/review.py` (edit/reset/retry operate on an `AgentRun`, not `Run`)
-- Modify: `backend/app/api/share.py`, `backend/app/render.py` (read from the call's `AgentRun`s)
+- Modify: `backend/app/render.py` (rewrite `to_markdown`/`export_json`/`share_snapshot` to render a list of per-agent, per-skill outputs generically — the old functions assumed fixed field names like `summary`/`scorecard`/`intent` that no longer exist)
+- Modify: `backend/app/api/share.py` (`_call_and_run` checks for `AgentRun`s instead of `run.insights`; call sites pass the new agent-output list)
 - Modify: `backend/scripts/seed.py` (seed built-in skills + Call Summarizer agent + Orchestrator; re-run the five sample calls through the real agent path)
 - Test: `backend/tests/test_agent_executor.py` (create)
 - Test: `backend/tests/test_api_agents_cutover.py` (create)
-- Modify (delete now-invalid assertions, keep the rest): `backend/tests/test_insights.py`, `backend/tests/test_run_state.py`, `backend/tests/test_share.py`, `backend/tests/test_crm_sync_pipeline.py`, `backend/tests/test_crm_integration.py`
+- Modify (delete now-invalid assertions, keep the rest): `backend/tests/test_insights.py`, `backend/tests/test_run_state.py`, `backend/tests/test_share.py`
 
 **Interfaces:**
 - Consumes: `new_agent_run_state` (Task 4), `run_skill` (Task 5), `dispatch` (Task 6), `route_skills` (Task 7), `resolve_entry_rule` (Task 8), all six new tables (Task 1).
-- Produces: `run_insights(payload: dict) -> None` (same job-handler signature, entirely new body); `get_call(call_id) -> dict` now returns `"agent_runs": [{"agent_name", "status", "output", "edited_output", "steps", "cost_usd"}, ...]` instead of `"insights"`/`"compliance"`.
+- Produces: `run_insights(payload: dict) -> None` (same job-handler signature, entirely new body); `get_call(call_id) -> dict` now returns `"agent_runs": [{"id", "agent_id", "agent_name", "status", "output", "edited", "steps", "cost_usd"}, ...]` instead of `"insights"`/`"compliance"` — `id` is the `AgentRun`'s own primary key, required by Task 11's edit/reset UI to build `PATCH /api/calls/{id}/agent-runs/{agent_run_id}`; `agent_id` is a separate field, not interchangeable with it.
 
 - [ ] **Step 1: Write the failing executor test first**
 
@@ -1842,6 +1846,48 @@ def test_zero_agents_selected_ships_with_reasoning_stored(monkeypatch):
         assert run.status == "shipped"
         assert "too short" in run.orchestrator_reasoning
         assert session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).first() is None
+
+
+def test_aggregate_budget_exceeded_skips_remaining_agents_cleanly(monkeypatch):
+    """Global Constraints: per-AgentRun cap AND the per-call aggregate cap
+    both apply. Two agents each spend WITHIN their own per-agent budget
+    (proving this isn't just the per-agent cap firing), but their combined
+    spend crosses MAX_COST_PER_RUN before a third agent starts — that third
+    agent's AgentRun must never be created. No zombie runs, clean finalize."""
+    call_id, agent_ids, skill_ids = _seed(
+        ["Call Summarizer", "QA Coach", "Knowledgebase"],
+        {"Call Summarizer": ["plain-summary"], "QA Coach": ["qa-rubric"], "Knowledgebase": ["kb-lookup"]},
+    )
+    monkeypatch.setenv("MAX_COST_PER_RUN", "0.05")
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: (
+            [agent_ids["Call Summarizer"], agent_ids["QA Coach"], agent_ids["Knowledgebase"]],
+            "All three needed.", 0.0,
+        ),
+    )
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([s["id"] for s in skills], "route all", 0.0),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A call."}, [], 0.03),  # under the 0.05 per-agent cap alone
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    with get_session() as session:
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()
+        assert len(agent_runs) == 2  # Call Summarizer + QA Coach ran and shipped; Knowledgebase never started
+        assert all(ar.status == "shipped" for ar in agent_runs)  # each individually under its own cap
+        assert run.status == "shipped"  # finalized cleanly, not stuck "running"
+        assert "budget" in run.orchestrator_reasoning.lower()
+        assert "Knowledgebase" in run.orchestrator_reasoning
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1883,15 +1929,13 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from .adapters.crm.base import get_crm_adapter, is_crm_configured
 from .adapters.pyai.base import get_adapter
 from .agent_runtime import new_agent_run_state
-from .crm_sync import build_note_html, build_properties
 from .db import get_session
 from .entry_rules import resolve_entry_rule
 from .insights import prettify_transcript
 from .jobs import enqueue, handler
-from .models import Agent, AgentRun, AgentSkill, Call, CrmSync, Orchestrator, Run, Skill
+from .models import Agent, AgentRun, AgentSkill, Call, Orchestrator, Run, Skill
 from .orchestrator import dispatch
 from .run_state import BudgetExceeded, StageFailed, max_cost_per_run
 from .skill_router import route_skills
@@ -1904,7 +1948,7 @@ MAX_POLLS = 120
 
 Delete `select_pack` entirely (no longer used — packs are retired from the live path per Global Constraints).
 
-Keep `_update_stage`, `process_call`, `poll_transcription`, `_fail_transcribe`, and `sync_call_to_crm` **exactly as they are today** — they operate above the insight chain and are untouched by this task.
+Keep `_update_stage`, `process_call`, `poll_transcription`, and `_fail_transcribe` **exactly as they are today** — they operate above the insight chain and are untouched by this task. There is no `sync_call_to_crm` on this branch (see the note at the top of this task) — do not add one.
 
 Replace `run_insights` and `_persist` with:
 
@@ -2014,33 +2058,37 @@ def run_insights(payload: dict) -> None:
         session.commit()
 
         agents_to_run = [(a, agent_skills[a.id]) for a in selected_agents]
+        spent_so_far = round(fmt_cost + dispatch_cost, 4)
+        budget = max_cost_per_run()
 
+    budget_note = None
     for agent, skills in agents_to_run:
+        if spent_so_far > budget:
+            budget_note = (
+                f"run budget ${budget:.2f} exceeded before agent {agent.name!r} could run "
+                f"(spent ${spent_so_far:.4f}) — remaining agents skipped"
+            )
+            break
         _run_one_agent(agent, skills, call_id, run_id, lines)
+        with get_session() as session:
+            spent_so_far = round(
+                spent_so_far
+                + (session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()[-1].cost_usd),
+                4,
+            )
 
     with get_session() as session:
         run = session.get(Run, run_id)
         agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()
         run.status = _aggregate_status([ar.status for ar in agent_runs])
         run.cost_usd = round(run.cost_usd + sum(ar.cost_usd for ar in agent_runs), 4)
+        if budget_note:
+            run.orchestrator_reasoning = f"{run.orchestrator_reasoning}\n\n{budget_note}"
         run.finished_at = datetime.now(timezone.utc)
         session.commit()
-
-    if is_crm_configured():
-        with get_session() as session:
-            run = session.get(Run, run_id)
-            agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run_id)).all()
-            merged_output = {}
-            for ar in agent_runs:
-                if ar.output:
-                    merged_output.update(ar.output)
-        try:
-            sync_call_to_crm(call_id, run_id, lines, merged_output, None)
-        except Exception:
-            pass
 ```
 
-Note on the CRM sync call at the end: `sync_call_to_crm`'s content builder (`crm_sync.py::build_note_html`/`build_properties`) still expects the OLD `insights` dict shape (`summary`, `next_steps`, `scorecard`, `dropped_claims`, `follow_up_email` keys) — since P2 (which merges the HubSpot branch properly against the new `AgentRun.output` shape) hasn't happened yet, this task passes the merged per-skill `AgentRun.output` straight through as a best-effort bridge, accepting that `crm_sync.py`'s call-out extraction (`build_callouts` reading `insights.get("scorecard")`, etc.) will find nothing to report until P2 properly adapts it. This is a known, temporary seam — call it out explicitly in the task's self-review and PR description; do not attempt to redesign `crm_sync.py` in this task, that redesign is P2's job per the spec's Non-goals.
+This is the end of `run_insights` — there is no CRM sync call. P1 has no side-effecting actions at all (spec Non-goals); CRM Automation is P2's job, once the HubSpot branch merges against this new `AgentRun` shape.
 
 - [ ] **Step 5: Delete the superseded old-pipeline code**
 
@@ -2123,20 +2171,14 @@ def get_call(call_id: str) -> dict:
         if call is None:
             raise HTTPException(status_code=404, detail="call not found")
         run = _latest_run(session, call_id)
-        crm_sync = None
         agent_runs_out = []
         if run:
-            sync = session.scalars(
-                select(CrmSync).where(CrmSync.call_id == call_id, CrmSync.run_id == run.id)
-            ).first()
-            if sync:
-                crm_sync = {"status": sync.status, "hubspot_contact_id": sync.hubspot_contact_id, "error": sync.error}
-
             agent_runs = session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all()
             for ar in agent_runs:
                 agent = session.get(Agent, ar.agent_id)
                 agent_runs_out.append(
                     {
+                        "id": ar.id,
                         "agent_id": ar.agent_id,
                         "agent_name": agent.name if agent else "Unknown agent",
                         "status": ar.status,
@@ -2167,11 +2209,10 @@ def get_call(call_id: str) -> dict:
                 else None
             ),
             "agent_runs": agent_runs_out,
-            "crm_sync": crm_sync,
         }
 ```
 
-Add `Agent, AgentRun` to the `from .models import ...` line at the top of `main.py`.
+Replace the top-of-file `from .models import Call, Run` line with `from .models import Agent, AgentRun, Call, Run` (no `CrmSync` — this branch has no such model; do not add one).
 
 In `backend/app/api/review.py`, replace the edit/reset endpoints to operate on a specific `AgentRun` (via `agent_run_id`) instead of the whole `Run`:
 
@@ -2206,24 +2247,202 @@ def reset_agent_run(call_id: str, agent_run_id: str) -> dict:
 
 Add `from ..models import AgentRun` to the top of `review.py`. Delete the old `InsightEdit`/`edit_insights`/`reset_insights` — superseded by the two endpoints above. Keep `retry` as-is except for `Run.stages` bookkeeping, which now only ever contains the single `transcribe` entry, so the existing `if s["status"] in ("failed", "skipped")` loop still behaves correctly (it just has one element to consider instead of eight); no code change needed there.
 
-In `backend/app/render.py` and `backend/app/api/share.py`, update the "effective insights" lookup — read `Run.insights` becomes reading across the run's `AgentRun`s. Read `render.py` and `api/share.py` in full before editing (both are small, under 110 lines) and change the single `run.edited_insights or run.insights` call site in each to:
+**Rewrite `backend/app/render.py` and `backend/app/api/share.py` in full.** This is not a one-line swap: the old `to_markdown`/`export_json`/`share_snapshot` assumed a fixed insights shape (`summary`, `objections`, `next_steps`, `scorecard`, `follow_up_email`, `intent` as flat top-level keys). That shape no longer exists — a seeded skill's output is a dict of `{field_name: value}` nested under that skill's name (e.g. `AgentRun.output["sales-scorecard"]["discovery_quality"]`), and a call can have multiple `AgentRun`s (multiple agents). The renderers need a generic per-field formatter instead of hardcoded field names.
+
+The old design also had a real, load-bearing guarantee: compliance findings never leave the building — they were structurally excluded from `export_json`/`share_snapshot`/`to_markdown` because `run.compliance` was a separate column those functions never read. Under the new design, `compliance-check` output lives inside `AgentRun.output` like every other skill, so that exclusion must now be enforced by name. Preserve it — this is not optional cleanup, it's carrying forward an intentional trust boundary from the spec's Phase-2 CRM design note ("compliance is internal, doesn't leave the building").
+
+Replace `backend/app/render.py` in full:
 
 ```python
-def _effective_agent_outputs(session, run) -> dict:
-    """Merge every AgentRun's (edited or original) output into one dict,
-    keyed by skill name — later agents win on key collision, matching the
-    existing 'human edits override AI output' precedent."""
-    from sqlalchemy import select as _select
+"""Rendering: effective agent outputs, Markdown export, and the shareable
+snapshot.
 
-    from .models import AgentRun
+Shared by the export endpoints and the share-link snapshot so a call renders
+identically whether downloaded or shared. compliance-check's output is
+deliberately excluded everywhere here — the old design enforced "compliance
+never leaves the building" structurally (a separate Run.compliance column
+these functions never read); now that compliance-check is an ordinary seeded
+skill living inside AgentRun.output, the same exclusion is enforced by name.
+"""
 
-    merged: dict = {}
-    for ar in session.scalars(_select(AgentRun).where(AgentRun.run_id == run.id)).all():
-        merged.update(ar.edited_output or ar.output or {})
-    return merged
+from typing import Any
+
+from sqlalchemy import select
+
+from .models import Agent, AgentRun
+
+EXCLUDED_SKILLS = {"compliance-check"}
+
+
+def effective_agent_outputs(session, run) -> list[dict]:
+    """[{"agent_name", "output", "edited"}, ...] for every AgentRun on this
+    run. Human edits win over the original AI output per AgentRun — same
+    precedent as the old edited_insights-over-insights rule. compliance-check
+    is stripped from `output` unconditionally."""
+    out = []
+    for ar in session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all():
+        agent = session.get(Agent, ar.agent_id)
+        raw = ar.edited_output or ar.output or {}
+        filtered = {k: v for k, v in raw.items() if k not in EXCLUDED_SKILLS}
+        out.append({
+            "agent_name": agent.name if agent else "Unknown agent",
+            "output": filtered,
+            "edited": bool(ar.edited_output),
+        })
+    return out
+
+
+def _cite(evidence: list) -> str:
+    if not evidence:
+        return ""
+    return " " + " ".join(f"[L{e['line']}]" for e in evidence)
+
+
+def _render_field(name: str, value) -> str:
+    """Formats one skill field generically by shape, not by name — a
+    score ({"score","justification","evidence"}), a check
+    ({"value","evidence"}), or a claims list ([{"text","evidence"}, ...])."""
+    label = name.replace("_", " ")
+    if isinstance(value, dict) and "score" in value:
+        return f"- {label}: **{value.get('score')}** — {value.get('justification', '')}{_cite(value.get('evidence', []))}"
+    if isinstance(value, dict) and "value" in value:
+        val = "yes" if value.get("value") else "no" if value.get("value") is False else "—"
+        return f"- {label}: **{val}**{_cite(value.get('evidence', []))}"
+    if isinstance(value, list):
+        if not value:
+            return f"- {label}: none"
+        return "\n".join(f"- {item.get('text', '')}{_cite(item.get('evidence', []))}" for item in value)
+    return f"- {label}: {value}"
+
+
+def to_markdown(call, run, agent_outputs: list[dict], *, include_transcript: bool = False, transcript=None) -> str:
+    lines: list[str] = [f"# {call.title}", "", f"_Status: {run.status}_", ""]
+
+    for ao in agent_outputs:
+        if not ao["output"]:
+            continue
+        lines.append(f"## {ao['agent_name']}" + (" · _edited_" if ao["edited"] else ""))
+        for skill_name, fields in ao["output"].items():
+            lines.append(f"### {skill_name.replace('-', ' ').title()}")
+            for field_name, value in (fields or {}).items():
+                lines.append(_render_field(field_name, value))
+            lines.append("")
+
+    if include_transcript and transcript:
+        lines.append("## Transcript")
+        for l in transcript.lines:
+            lines.append(f"{l['line']}. **{l['speaker']}:** {l['text']}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def export_json(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
+    """Full structured export — includes evidence, excludes compliance-check."""
+    return {
+        "call": {
+            "id": call.id,
+            "title": call.title,
+            "duration_s": call.duration_s,
+            "recorded_at": call.recorded_at.isoformat(),
+        },
+        "run": {"status": run.status, "edited": any(ao["edited"] for ao in agent_outputs)},
+        "agent_runs": agent_outputs,
+    }
+
+
+def share_snapshot(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
+    """Frozen at share time. No raw transcript, no compliance-check."""
+    return {
+        "title": call.title,
+        "recorded_at": call.recorded_at.isoformat(),
+        "duration_s": call.duration_s,
+        "agent_runs": agent_outputs,
+    }
 ```
 
-Place this helper in `render.py` (it's already the module responsible for "what does an export/share look like") and import it from `api/share.py` rather than duplicating it. Update both call sites to call `_effective_agent_outputs(session, run)` instead of `run.edited_insights or run.insights`, and pass an open `session` through where one doesn't already exist in scope (both functions already run inside a `with get_session() as session:` block today — confirm this by reading the current code before editing, and thread `session` into whichever helper doesn't already have it in scope).
+Replace `backend/app/api/share.py` in full — `get_share`/`revoke_share` are unchanged from today; `_call_and_run`, `export_markdown`, `export_call_json`, `create_share` change:
+
+```python
+"""Exports (Markdown / JSON) and share links.
+
+Exports render the effective agent outputs (human edits if present, else AI
+output). Share links freeze a snapshot at creation time — later edits don't
+change an already-shared page — and are revocable. Shared snapshots exclude
+the raw transcript and compliance-check output.
+"""
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
+from sqlalchemy import select
+
+from ..db import get_session
+from ..models import AgentRun, Call, Run, ShareLink
+from ..render import effective_agent_outputs, export_json, share_snapshot, to_markdown
+
+router = APIRouter(tags=["share"])
+
+
+def _call_and_run(session, call_id: str) -> tuple[Call, Run]:
+    call = session.get(Call, call_id)
+    if call is None:
+        raise HTTPException(404, "call not found")
+    run = session.scalars(
+        select(Run).where(Run.call_id == call_id).order_by(Run.created_at.desc())
+    ).first()
+    has_output = run is not None and session.scalars(
+        select(AgentRun).where(AgentRun.run_id == run.id)
+    ).first() is not None
+    if not has_output:
+        raise HTTPException(409, "call has no agent output to export yet")
+    return call, run
+
+
+@router.get("/api/calls/{call_id}/export.md", response_class=PlainTextResponse)
+def export_markdown(call_id: str, transcript: bool = False) -> str:
+    with get_session() as session:
+        call, run = _call_and_run(session, call_id)
+        outputs = effective_agent_outputs(session, run)
+        return to_markdown(call, run, outputs, include_transcript=transcript, transcript=call.transcript)
+
+
+@router.get("/api/calls/{call_id}/export.json")
+def export_call_json(call_id: str) -> dict:
+    with get_session() as session:
+        call, run = _call_and_run(session, call_id)
+        return export_json(call, run, effective_agent_outputs(session, run))
+
+
+@router.post("/api/calls/{call_id}/share")
+def create_share(call_id: str) -> dict:
+    with get_session() as session:
+        call, run = _call_and_run(session, call_id)
+        snap = share_snapshot(call, run, effective_agent_outputs(session, run))
+        link = ShareLink(run_id=run.id, content_snapshot=snap)
+        session.add(link)
+        session.commit()
+        return {"token": link.token, "url": f"/share/{link.token}"}
+
+
+@router.get("/api/share/{token}")
+def get_share(token: str) -> dict:
+    with get_session() as session:
+        link = session.get(ShareLink, token)
+        if link is None or link.revoked:
+            raise HTTPException(404, "share link not found or revoked")
+        return {"snapshot": link.content_snapshot, "created_at": link.created_at.isoformat()}
+
+
+@router.post("/api/share/{token}/revoke")
+def revoke_share(token: str) -> dict:
+    with get_session() as session:
+        link = session.get(ShareLink, token)
+        if link is None:
+            raise HTTPException(404, "share link not found")
+        link.revoked = True
+        session.commit()
+        return {"ok": True, "revoked": True}
+```
 
 - [ ] **Step 8: Seed built-in skills, the Call Summarizer agent, and the orchestrator**
 
@@ -2462,7 +2681,192 @@ Delete `backend/tests/test_run_state.py`'s tests for the removed `RunState`/`STA
 
 In `backend/tests/test_insights.py`, delete every test that exercises `detect_intent`/`extract`/`score`/`compose_email`/`run_insights`'s old stage list (the file's own `_seed_call`/`STAGES` import). Keep only tests unrelated to the retired functions, if any remain — if none do, delete the file (its coverage moves to `test_agent_executor.py` and `test_skill_executor.py`).
 
-In `backend/tests/test_share.py` and `backend/tests/test_crm_sync_pipeline.py`/`test_crm_integration.py`, replace every `from app.run_state import STAGES` / `stages=[... for s in STAGES]` fixture construction with the single-element `[{"name": "transcribe", ...}]` shape from Step 6, and replace any assertion reading `run.insights`/`run.compliance` with the `AgentRun`-based equivalent (query `AgentRun` for the call's latest `Run` and assert against `.output`). Read each file in full before editing — do not guess at line numbers from this plan; the exact edits depend on each file's current fixture helpers.
+Replace `backend/tests/test_share.py` in full — its fixture built a `Run` with `insights=INSIGHTS` and an 8-element `STAGES`-based stage list; both are gone. The new fixture creates one `Agent` + one `AgentRun` holding output nested by skill name, matching what `run_insights` actually produces now. This rewrite also adds a compliance-exclusion regression test that had no equivalent before (compliance's exclusion used to be structural — a column these functions never read — and is now enforced by name in `render.py`, so it needs its own test):
+
+```python
+"""M4/M5 (agent-skill architecture cutover): edit-before-share, retry,
+exports, and share-link lifecycle — now driven by AgentRun instead of
+Run.insights/compliance. See
+docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4.
+"""
+
+import json
+import uuid
+
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from app.db import get_session
+from app.main import app
+from app.models import Agent, AgentRun, Call, Run, Transcript
+
+LINES = [
+    {"line": 1, "speaker": "Ana", "text": "This call is recorded. How can I help?"},
+    {"line": 2, "speaker": "Bob", "text": "My invoice was charged twice this month."},
+]
+
+AGENT_OUTPUT = {
+    "summary-and-next-steps": {
+        "summary": [{"text": "Bob was double-charged.", "evidence": [{"quote": "charged twice this month", "line": 2}]}],
+        "next_steps": [{"text": "Refund the duplicate.", "evidence": [{"quote": "charged twice", "line": 2}]}],
+    },
+    "support-scorecard": {
+        "issue_identified": {"value": True, "evidence": [{"quote": "charged twice", "line": 2}]},
+    },
+    "follow-up-email": {
+        "email_draft": [{"text": "Subject: Your refund\n\nHi Bob, refund on the way.", "evidence": [{"quote": "charged twice", "line": 2}]}],
+    },
+    "compliance-check": {
+        "compliance_findings": [{"text": "Should never appear in exports.", "evidence": [{"quote": "charged twice", "line": 2}]}],
+    },
+}
+
+
+def _seed(run_status="shipped", agent_run_status="shipped", transcript=True, output=AGENT_OUTPUT):
+    with get_session() as session:
+        call = Call(title="Billing call", source="upload", external_id=f"s-{uuid.uuid4().hex}", duration_s=120)
+        session.add(call)
+        session.flush()
+        if transcript:
+            session.add(Transcript(call_id=call.id, lines=LINES))
+        run = Run(
+            call_id=call.id, status=run_status,
+            stages=[{"name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None}],
+        )
+        session.add(run)
+        session.flush()
+        agent_run_id = None
+        if output is not None:
+            agent = Agent(name="Call Summarizer", description="d", system_prompt="p")
+            session.add(agent)
+            session.flush()
+            agent_run = AgentRun(
+                call_id=call.id, run_id=run.id, agent_id=agent.id, status=agent_run_status,
+                steps=[{"name": k, "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None} for k in output],
+                output=output,
+            )
+            session.add(agent_run)
+            session.flush()
+            agent_run_id = agent_run.id
+        session.commit()
+        return call.id, agent_run_id
+
+
+def test_edit_then_export_reflects_edits():
+    with TestClient(app) as c:
+        call_id, agent_run_id = _seed()
+        edited = json.loads(json.dumps(AGENT_OUTPUT))
+        edited["follow-up-email"]["email_draft"][0]["text"] = "Subject: Refund confirmed — sorry for the mix-up\n\nHi Bob."
+        r = c.patch(f"/api/calls/{call_id}/agent-runs/{agent_run_id}", json={"output": edited})
+        assert r.json()["edited"] is True
+
+        detail = c.get(f"/api/calls/{call_id}").json()
+        ar = detail["agent_runs"][0]
+        assert ar["edited"] is True
+        assert "Refund confirmed" in ar["output"]["follow-up-email"]["email_draft"][0]["text"]
+
+        md = c.get(f"/api/calls/{call_id}/export.md").text
+        assert "Refund confirmed" in md
+        assert "_edited_" in md
+
+
+def test_original_ai_output_preserved_after_edit():
+    with TestClient(app) as c:
+        call_id, agent_run_id = _seed()
+        edited = json.loads(json.dumps(AGENT_OUTPUT))
+        edited["summary-and-next-steps"]["summary"] = [{"text": "Human rewrote this.", "evidence": []}]
+        c.patch(f"/api/calls/{call_id}/agent-runs/{agent_run_id}", json={"output": edited})
+        c.post(f"/api/calls/{call_id}/agent-runs/{agent_run_id}/reset")
+        detail = c.get(f"/api/calls/{call_id}").json()
+        ar = detail["agent_runs"][0]
+        assert ar["edited"] is False
+        assert ar["output"]["summary-and-next-steps"]["summary"][0]["text"] == "Bob was double-charged."
+
+
+def test_export_json_excludes_compliance_but_keeps_evidence():
+    with TestClient(app) as c:
+        call_id, _ = _seed()
+        data = c.get(f"/api/calls/{call_id}/export.json").json()
+        for ao in data["agent_runs"]:
+            assert "compliance-check" not in ao["output"]
+        summary = data["agent_runs"][0]["output"]["summary-and-next-steps"]["summary"]
+        assert summary[0]["evidence"][0]["line"] == 2
+
+
+def test_markdown_transcript_opt_in():
+    with TestClient(app) as c:
+        call_id, _ = _seed()
+        assert "## Transcript" not in c.get(f"/api/calls/{call_id}/export.md").text
+        assert "## Transcript" in c.get(f"/api/calls/{call_id}/export.md?transcript=true").text
+
+
+def test_markdown_excludes_compliance():
+    with TestClient(app) as c:
+        call_id, _ = _seed()
+        md = c.get(f"/api/calls/{call_id}/export.md").text
+        assert "Should never appear in exports" not in md
+
+
+def test_share_link_freezes_snapshot_and_excludes_transcript():
+    with TestClient(app) as c:
+        call_id, agent_run_id = _seed()
+        token = c.post(f"/api/calls/{call_id}/share").json()["token"]
+
+        # edit AFTER sharing — the shared page must not change
+        edited = json.loads(json.dumps(AGENT_OUTPUT))
+        edited["summary-and-next-steps"]["summary"] = [{"text": "changed later", "evidence": []}]
+        c.patch(f"/api/calls/{call_id}/agent-runs/{agent_run_id}", json={"output": edited})
+
+        snap = c.get(f"/api/share/{token}").json()["snapshot"]
+        frozen_summary = snap["agent_runs"][0]["output"]["summary-and-next-steps"]["summary"]
+        assert frozen_summary[0]["text"] == "Bob was double-charged."  # frozen
+        assert "transcript" not in snap
+        for ao in snap["agent_runs"]:
+            assert "compliance-check" not in ao["output"]
+
+
+def test_share_revoke_404s():
+    with TestClient(app) as c:
+        call_id, _ = _seed()
+        token = c.post(f"/api/calls/{call_id}/share").json()["token"]
+        assert c.get(f"/api/share/{token}").status_code == 200
+        c.post(f"/api/share/{token}/revoke")
+        assert c.get(f"/api/share/{token}").status_code == 404
+
+
+def test_retry_only_on_failed_or_partial():
+    with TestClient(app) as c:
+        shipped, _ = _seed(run_status="shipped")
+        assert c.post(f"/api/calls/{shipped}/retry").status_code == 409
+
+        partial, _ = _seed(run_status="partial")
+        with get_session() as session:
+            run = session.scalars(select(Run).where(Run.call_id == partial)).first()
+            stages = [dict(s) for s in run.stages]
+            stages[-1]["status"] = "failed"
+            stages[-1]["error"] = "bad json"
+            run.stages = stages
+            session.commit()
+
+        r = c.post(f"/api/calls/{partial}/retry")
+        assert r.json()["from_stage"] == "run_insights"  # transcript exists
+
+        with get_session() as session:
+            run = session.scalars(select(Run).where(Run.call_id == partial)).first()
+            assert run.status == "running"
+            assert run.stages[-1]["status"] == "pending"
+
+
+def test_retry_reprocesses_when_no_transcript():
+    with TestClient(app) as c:
+        call_id, _ = _seed(run_status="failed", transcript=False, output=None)
+        with get_session() as session:
+            run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+            run.stages = [{"name": "transcribe", "status": "failed", "attempts": 3, "cost_usd": 0.0, "error": "403"}]
+            session.commit()
+        r = c.post(f"/api/calls/{call_id}/retry")
+        assert r.json()["from_stage"] == "process_call"
+```
 
 - [ ] **Step 10: Run the full backend suite**
 
@@ -2946,8 +3350,10 @@ git commit -m "feat: add Agent/Skill CRUD APIs"
 - Modify: `web/components/Header.tsx` (retire — its nav duties move to `Nav.tsx`; keep it only if `app/layout.tsx` still needs a top bar for the title, otherwise delete and update `web/app/page.tsx`'s import)
 - Create: `web/app/agents/page.tsx`
 - Create: `web/app/skills/page.tsx`
-- Modify: `web/lib/api.ts` (add Agent/Skill types + fetch functions; remove the retired `intent` field from `CallSummary` and the `insights`/`compliance` fields from `CallDetail`, replaced with `agent_runs`)
+- Modify: `web/lib/api.ts` (add Agent/Skill types + fetch functions; remove the retired `intent` field from `CallSummary` and the `insights`/`compliance` fields from `CallDetail`, replaced with `agent_runs`; add `editAgentRunOutput`/`resetAgentRunOutput`)
 - Modify: `web/app/page.tsx` (drop the retired `intent` badge; read `run_status` unchanged)
+- **Modify: `web/components/CallView.tsx`** (rewrite to render `agent_runs` generically instead of the retired flat `insights`/`compliance` fields — this is load-bearing, not optional polish: Task 9's backend cutover removes `insights`/`compliance` from the API response entirely, and this component is the only thing rendering a call's results today. Without this change the `/calls/[id]` page silently breaks and `npm run build` fails on this file's now-invalid property access.)
+- Modify: `web/lib/status.ts` (`stageLabels` currently maps the old 8 fixed stage names; replace with the new skill names so `ProcessingDetails`/step badges show readable labels instead of raw skill-name fallbacks)
 
 **Interfaces:**
 - Consumes: `GET/POST /api/agents`, `GET/PATCH/DELETE /api/agents/{id}`, `POST/DELETE /api/agents/{id}/skills[/{skill_id}]`, `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}`, `POST /api/skills/upload` (Task 10).
@@ -2957,19 +3363,22 @@ This is explicitly **not** a visual redesign (Global Constraints) — Tailwind c
 
 - [ ] **Step 1: Add Agent/Skill types and API functions to `web/lib/api.ts`**
 
-Read the current file in full first (already read above — 181 lines). Remove `intent: string | null;` from `CallSummary`, and replace the `insights`/`compliance` fields on `CallDetail` with `agent_runs`. Add after the existing `CallDetail` type:
+Read the current file in full first. Remove `intent: string | null;` from `CallSummary`, and replace the `insights`/`compliance` fields on `CallDetail` with `agent_runs`. Also remove the now-dead `type Insights`, `type ScorecardField`, `type ComplianceFinding` (Task 9 deleted their backing endpoints and shape) and the `saveInsights`/`resetInsights` functions — they call `PATCH /api/calls/{id}/insights` and `POST /api/calls/{id}/insights/reset`, both deleted in Task 9. Keep `type Evidence` — it's still the right shape for every skill field's evidence array. Add after the existing `CallDetail` type:
 
 ```typescript
 export type AgentRunSummary = {
+  id: string;
   agent_id: string;
   agent_name: string;
   status: "pending" | "shipped" | "partial" | "failed";
   steps: { name: string; status: string; attempts: number; cost_usd: number; error: string | null }[];
-  output: Record<string, unknown> | null;
+  output: Record<string, Record<string, unknown>> | null;
   edited: boolean;
   cost_usd: number;
 };
 ```
+
+`id` is the `AgentRun`'s own primary key — the edit/reset endpoints below key on it, not on `agent_id`. `output` is keyed by skill name, each value the skill's own `{field_name: value}` dict.
 
 Update `CallDetail`:
 
@@ -2986,9 +3395,10 @@ export type CallDetail = {
   run: { status: RunStatus; stages: Stage[]; orchestrator_reasoning: string | null };
   transcript: { language: string; lines: { line: number; speaker: string; text: string }[] } | null;
   agent_runs: AgentRunSummary[];
-  crm_sync: CrmSyncInfo | null;
 };
 ```
+
+(There is no `crm_sync` field on this branch's `CallDetail` today, and Task 9's `get_call` rewrite does not add one — CRM sync lands in P2. Do not reference a `CrmSyncInfo` type; it doesn't exist.)
 
 Update `CallSummary` (remove `intent`):
 
@@ -3059,7 +3469,18 @@ export const uploadSkill = (file: File) => {
   fd.append("file", file);
   return fetch(`${API_BASE}/api/skills/upload`, { method: "POST", body: fd }).then(j<Skill>);
 };
+
+export const editAgentRunOutput = (callId: string, agentRunId: string, output: Record<string, unknown>) =>
+  fetch(`${API_BASE}/api/calls/${callId}/agent-runs/${agentRunId}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ output }),
+  }).then(j<{ ok: boolean; edited: boolean }>);
+export const resetAgentRunOutput = (callId: string, agentRunId: string) =>
+  fetch(`${API_BASE}/api/calls/${callId}/agent-runs/${agentRunId}/reset`, { method: "POST" }).then(
+    j<{ ok: boolean; edited: boolean }>,
+  );
 ```
+
+`editAgentRunOutput`/`resetAgentRunOutput` replace the deleted `saveInsights`/`resetInsights` — they call Task 9's `PATCH /api/calls/{id}/agent-runs/{agent_run_id}` and its `/reset` sibling, keyed on the `AgentRun`'s own `id` (not `agent_id`).
 
 - [ ] **Step 2: Build the left-nav shell**
 
@@ -3398,20 +3819,346 @@ export default function SkillsPage() {
 }
 ```
 
-- [ ] **Step 6: Type-check and smoke-test the frontend**
+- [ ] **Step 6: Rewrite `CallView.tsx` to render `agent_runs` generically**
+
+Update `stageLabels` in `web/lib/status.ts` — the old dict maps the 8 retired stage names; replace it with the new skill names (any name not listed here already falls back to the raw name via the existing `?? s.name` call sites, so this dict only needs the common ones):
+
+```typescript
+export const stageLabels: Record<string, string> = {
+  transcribe: "Transcribe",
+  "summary-and-next-steps": "Summary & next steps",
+  "sales-scorecard": "Sales scorecard",
+  "support-scorecard": "Support scorecard",
+  "compliance-check": "Compliance check",
+  "follow-up-email": "Follow-up email",
+};
+```
+
+Replace `web/components/CallView.tsx` in full. The old version rendered hardcoded fields (`summary`, `next_steps`, `scorecard`, `compliance`, `follow_up_email`) with per-field editing. Those fields don't exist anymore — output is a list of `AgentRunSummary`, each holding `{skill_name: {field_name: value}}`. This version renders every agent's every skill's fields generically (by shape — a score, a check, or a claims list — same approach as `render.py::_render_field` on the backend, for consistency) and edits a whole `AgentRun`'s output as JSON rather than field-by-field, which is a real simplification but not a regression: nothing in this plan asked for per-field inline editing of an arbitrary, user-defined skill schema, and building that generically was never in scope. Evidence citations (`jumpTo`/the "❝ proof" chip), retry, share, export, and the processing-details step badges are preserved as-is:
+
+```tsx
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import {
+  getCall,
+  retryCall,
+  editAgentRunOutput,
+  resetAgentRunOutput,
+  createShare,
+  exportMarkdownUrl,
+  exportJsonUrl,
+  type CallDetail,
+  type Evidence,
+  type AgentRunSummary,
+} from "@/lib/api";
+import { humanizeStatus, tonePill, stageLabels } from "@/lib/status";
+import Header from "@/components/Header";
+
+function jumpTo(line: number) {
+  const el = document.getElementById(`line-${line}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("flash");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("flash");
+}
+
+function Cite({ evidence }: { evidence: Evidence[] }) {
+  if (!evidence?.length) return null;
+  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
+  return (
+    <button className="cite" title={title} onClick={() => jumpTo(evidence[0].line)}>
+      ❝ proof{evidence.length > 1 ? ` ·${evidence.length}` : ""}
+    </button>
+  );
+}
+
+function renderScalarField(value: unknown): { text: string; evidence: Evidence[] } {
+  if (value && typeof value === "object" && "score" in (value as Record<string, unknown>)) {
+    const v = value as { score: number; justification?: string; evidence: Evidence[] };
+    return { text: `${v.score} — ${v.justification ?? ""}`, evidence: v.evidence ?? [] };
+  }
+  if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
+    const v = value as { value: boolean | null; evidence: Evidence[] };
+    return { text: v.value ? "yes" : v.value === false ? "no" : "—", evidence: v.evidence ?? [] };
+  }
+  return { text: String(value ?? ""), evidence: [] };
+}
+
+function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<string, unknown> }) {
+  return (
+    <div className="card">
+      <div className="eyebrow">{skillName.replaceAll("-", " ")}</div>
+      <ul className="mt-2 space-y-2 text-sm leading-relaxed">
+        {Object.entries(fields).map(([name, value]) => {
+          if (Array.isArray(value)) {
+            const items = value as { text: string; evidence: Evidence[] }[];
+            if (items.length === 0) return <li key={name} className="text-neutral-400">{name.replaceAll("_", " ")}: none</li>;
+            return items.map((item, i) => (
+              <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} /></li>
+            ));
+          }
+          const rendered = renderScalarField(value);
+          return (
+            <li key={name} className="flex items-center gap-2">
+              <span className="capitalize text-neutral-700">{name.replaceAll("_", " ")}:</span>
+              <span className="font-medium">{rendered.text}</span>
+              <Cite evidence={rendered.evidence} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AgentRunCard({ callId, agentRun, onChanged }: { callId: string; agentRun: AgentRunSummary; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draftText, setDraftText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function startEdit() {
+    setDraftText(JSON.stringify(agentRun.output ?? {}, null, 2));
+    setError(null);
+    setEditing(true);
+  }
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const parsed = JSON.parse(draftText);
+      await editAgentRunOutput(callId, agentRun.id, parsed);
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reset() {
+    setBusy(true);
+    try {
+      await resetAgentRunOutput(callId, agentRun.id);
+      setEditing(false);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">
+          {agentRun.agent_name}
+          {agentRun.edited && <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-xs text-purple-700">edited by you</span>}
+        </h2>
+        {!editing ? (
+          <button onClick={startEdit} className="btn text-xs">Edit</button>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={save} disabled={busy} className="btn btn-primary text-xs">Save</button>
+            <button onClick={() => setEditing(false)} className="btn text-xs">Cancel</button>
+            {agentRun.edited && <button onClick={reset} disabled={busy} className="btn text-xs">Revert to AI original</button>}
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div>
+          <textarea
+            className="edit-field min-h-[240px] w-full font-mono text-xs"
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+          />
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+      ) : (
+        Object.entries(agentRun.output ?? {}).map(([skillName, fields]) => (
+          <SkillOutput key={skillName} skillName={skillName} fields={fields} />
+        ))
+      )}
+    </div>
+  );
+}
+
+export default function CallView({ id }: { id: string }) {
+  const [data, setData] = useState<CallDetail | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [share, setShare] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => getCall(id).then(setData).catch((e) => setErr(String(e))), [id]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(() => {
+      setData((prev) => {
+        if (prev && (prev.run.status === "running" || prev.run.status === "pending")) load();
+        return prev;
+      });
+    }, 2500);
+    return () => clearInterval(t);
+  }, [load]);
+
+  if (err) return <Shell><p className="text-sm text-red-600">{err}</p></Shell>;
+  if (!data) return <Shell><p className="text-sm text-neutral-500">Loading…</p></Shell>;
+
+  const { call, run, transcript, agent_runs } = data;
+  const st = humanizeStatus(run.status);
+
+  if (!transcript || agent_runs.length === 0) {
+    return (
+      <Shell>
+        <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
+        <div className="mt-6 flex items-center gap-2 text-sm text-neutral-500">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+          {transcript ? "Writing the notes…" : "Transcribing the call…"} This updates on its own.
+        </div>
+      </Shell>
+    );
+  }
+
+  async function doRetry() { setBusy(true); try { await retryCall(id); await load(); } finally { setBusy(false); } }
+  async function doShare() {
+    setBusy(true);
+    try { const { token } = await createShare(id); setShare(`${window.location.origin}/share/${token}`); } finally { setBusy(false); }
+  }
+
+  const failedSteps = agent_runs.flatMap((ar) => ar.steps.filter((s) => s.status === "failed"));
+
+  return (
+    <Shell>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
+          <p className="mt-1 text-xs text-neutral-500">
+            {call.participants.join(", ")} · {new Date(call.recorded_at).toLocaleDateString()}
+          </p>
+        </div>
+        <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${tonePill[st.tone]}`}>
+          {st.busy && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
+          {st.label}
+        </span>
+      </div>
+
+      {(run.status === "partial" || run.status === "failed") && failedSteps.length > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              {failedSteps.map((s) => (
+                <div key={s.name}><strong>{stageLabels[s.name] ?? s.name}</strong> couldn&apos;t finish: {s.error}</div>
+              ))}
+            </div>
+            <button onClick={doRetry} disabled={busy} className="btn btn-warn shrink-0">Retry</button>
+          </div>
+        </div>
+      )}
+
+      {run.orchestrator_reasoning && (
+        <p className="mt-3 text-xs text-neutral-400">Why these agents ran: {run.orchestrator_reasoning}</p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button onClick={doShare} disabled={busy} className="btn">Share link</button>
+        <a href={exportMarkdownUrl(id)} className="btn" download>Export .md</a>
+        <a href={exportJsonUrl(id)} className="btn" download>Export .json</a>
+      </div>
+
+      {share && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+          <span className="text-emerald-800">Public link:</span>
+          <input readOnly value={share} className="flex-1 bg-transparent text-emerald-900" />
+          <button onClick={() => { navigator.clipboard.writeText(share); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="btn">
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
+          <button onClick={() => setShare(null)} className="text-neutral-400">✕</button>
+        </div>
+      )}
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-7">
+          {agent_runs.map((ar) => (
+            <AgentRunCard key={ar.id} callId={id} agentRun={ar} onChanged={load} />
+          ))}
+          <ProcessingDetails run={run} />
+        </div>
+
+        <div className="lg:col-span-5">
+          <div className="sticky top-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="eyebrow">Transcript</div>
+              <span className="text-xs text-neutral-400">click &quot;❝ proof&quot; in the notes to jump here</span>
+            </div>
+            <ol className="max-h-[72vh] space-y-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+              {transcript.lines.map((l) => (
+                <li key={l.line} id={`line-${l.line}`} className="flex scroll-mt-4 gap-3 rounded px-1 py-0.5">
+                  <span className="w-6 shrink-0 text-right text-xs text-neutral-300">{l.line}</span>
+                  <span><span className="font-medium">{l.speaker}:</span> <span className="text-neutral-700">{l.text}</span></span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Header />
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        <Link href="/" className="text-xs text-neutral-500 hover:text-neutral-800">← All calls</Link>
+        <div className="mt-3">{children}</div>
+      </main>
+    </>
+  );
+}
+
+function ProcessingDetails({ run }: { run: CallDetail["run"] }) {
+  return (
+    <details className="rounded-xl border border-neutral-200 px-5 py-3">
+      <summary className="cursor-pointer text-xs font-medium text-neutral-500">Processing details</summary>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {run.stages.map((s) => (
+          <span key={s.name} title={s.error ?? ""}
+            className={`rounded px-1.5 py-0.5 text-xs ${
+              s.status === "ok" ? "bg-emerald-50 text-emerald-700"
+                : s.status === "failed" ? "bg-red-50 text-red-700"
+                : s.status === "skipped" ? "bg-neutral-100 text-neutral-400"
+                : "bg-blue-50 text-blue-700"
+            }`}>
+            {stageLabels[s.name] ?? s.name}
+          </span>
+        ))}
+      </div>
+    </details>
+  );
+}
+```
+
+Note: this drops the old `dropped_claims`-count line from the failure banner (it used to read `insights.dropped_claims`, a field that no longer exists — dropped claims are now visible per-skill as missing fields in `SkillOutput`, which is sufficient; a dedicated count is a nicety, not required for parity).
+
+- [ ] **Step 7: Type-check and smoke-test the frontend**
 
 Run: `cd web && npm run build`
 Expected: builds cleanly, no TypeScript errors.
 
-Run: `cd web && npm run dev` (in one terminal) and `cd backend && uv run uvicorn app.main:app --reload` (in another, with `backend/.env` keys set), then in a browser: visit `http://localhost:3000/`, confirm the left nav shows Calls/Agents/Skills; visit `/agents`, create an agent, attach a skill created on `/skills`, confirm it appears in the agent's skill list and detaches cleanly; visit `/` and confirm the calls list still loads and no longer shows a call-type badge.
+Run: `cd web && npm run dev` (in one terminal) and `cd backend && uv run uvicorn app.main:app --reload` (in another, with `backend/.env` keys set), then in a browser: visit `http://localhost:3000/`, confirm the left nav shows Calls/Agents/Skills; visit `/agents`, create an agent, attach a skill created on `/skills`, confirm it appears in the agent's skill list and detaches cleanly; visit `/` and confirm the calls list still loads and no longer shows a call-type badge; open a seeded sample call's detail page and confirm each agent's skill output renders with working evidence citations, and that editing/reverting an agent run's output round-trips correctly.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add web/components/Nav.tsx web/app/layout.tsx web/app/agents/page.tsx web/app/skills/page.tsx \
-        web/lib/api.ts web/app/page.tsx
+        web/lib/api.ts web/app/page.tsx web/components/CallView.tsx web/lib/status.ts
 git rm web/components/Header.tsx
-git commit -m "feat: add left-nav shell and functional Agent/Skill CRUD screens"
+git commit -m "feat: add left-nav shell, functional Agent/Skill CRUD screens, and generic agent-run rendering"
 ```
 
 ---
@@ -3425,5 +4172,5 @@ After Task 11, confirm every item from the spec's Verification section:
 3. **Evidence gate intact** — Task 3/5's fabricated-claim tests.
 4. **Isolation** — Task 9's `test_one_agent_failing_does_not_affect_sibling`.
 5. **Budget** — Task 4's budget tests plus Task 9's harness reuse.
-6. **Config round-trip** — Task 11 Step 6's manual UI check (create agent, upload skill, attach, confirm it appears in routing candidates — full "it runs on the next call" confirmation requires re-running a call through `/api/ingest/upload` after attaching, worth doing once manually here).
-7. **Full backend suite green; frontend type-check clean** — Task 9 Step 10, Task 11 Step 6.
+6. **Config round-trip** — Task 11 Step 7's manual UI check (create agent, upload skill, attach, confirm it appears in routing candidates — full "it runs on the next call" confirmation requires re-running a call through `/api/ingest/upload` after attaching, worth doing once manually here).
+7. **Full backend suite green; frontend type-check clean** — Task 9 Step 10, Task 11 Step 7.
