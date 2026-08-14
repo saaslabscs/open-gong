@@ -240,6 +240,12 @@ export default function Home() {
                 placeholder="paste a recording link"
                 className="w-56 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
               />
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-400">
+                Webhook
+                <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+                  Coming soon
+                </span>
+              </span>
             </div>
             {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
             {duplicateOf && (
