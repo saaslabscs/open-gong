@@ -8,10 +8,11 @@ hint. The database is the sole source of truth — no environment variables.
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..db import get_session
-from ..integrations.providers import PROVIDERS, Provider
+from ..integrations.providers import BY_KEY, PROVIDERS, Provider
 from ..models import Integration
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
@@ -52,3 +53,60 @@ def list_integrations() -> list[dict]:
     with get_session() as session:
         rows = {r.provider: r for r in session.scalars(select(Integration)).all()}
         return [_serialize(p, rows.get(p.key)) for p in PROVIDERS]
+
+
+class ConnectBody(BaseModel):
+    token: str
+
+
+def _known(key: str) -> Provider:
+    p = BY_KEY.get(key)
+    if p is None:
+        raise HTTPException(404, "unknown integration")
+    return p
+
+
+def _connectable(key: str) -> Provider:
+    p = _known(key)
+    if not p.available or p.verify is None:
+        raise HTTPException(400, f"{p.label} can’t be connected yet")
+    return p
+
+
+@router.put("/{provider}")
+def connect(provider: str, body: ConnectBody) -> dict:
+    """Verify first, persist second — a stored connection is a working one."""
+    p = _connectable(provider)
+    token = body.token.strip()
+    if not token:
+        raise HTTPException(400, "a token is required")
+
+    result = p.verify(token)
+    if not result.ok:
+        raise HTTPException(400, result.error or f"{p.label} rejected that token")
+
+    with get_session() as session:
+        row = session.get(Integration, provider)
+        if row is None:
+            row = Integration(provider=provider)
+            session.add(row)
+        row.access_token = token
+        row.account_label = result.account_label
+        row.account_ref = result.account_ref
+        row.status = "connected"
+        row.last_error = None
+        row.connected_at = _now()
+        row.last_verified_at = _now()
+        session.commit()
+        return _serialize(p, row)
+
+
+@router.delete("/{provider}")
+def disconnect(provider: str) -> dict:
+    _known(provider)
+    with get_session() as session:
+        row = session.get(Integration, provider)
+        if row is not None:
+            session.delete(row)
+            session.commit()
+    return {"ok": True}
