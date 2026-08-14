@@ -83,7 +83,7 @@ def verify_hubspot(token: str) -> VerifyResult:
                         label = f"Portal {ref}"
             return VerifyResult(ok=True, account_label=label, account_ref=ref)
     except httpx.HTTPError as e:
-        return VerifyResult(ok=False, error=f"couldn't reach HubSpot: {e}")
+        return VerifyResult(ok=False, error=f"couldn’t reach HubSpot: {e}")
 
 
 def verify_pipedrive(token: str) -> VerifyResult:
@@ -91,7 +91,7 @@ def verify_pipedrive(token: str) -> VerifyResult:
         with _client() as client:
             resp = client.get(f"{PIPEDRIVE_API}/users/me", headers={"x-api-token": token})
     except httpx.HTTPError as e:
-        return VerifyResult(ok=False, error=f"couldn't reach Pipedrive: {e}")
+        return VerifyResult(ok=False, error=f"couldn’t reach Pipedrive: {e}")
     if resp.status_code >= 300:
         return VerifyResult(ok=False, error=_rejection(resp, "Pipedrive"))
     data = resp.json().get("data") or {}
@@ -115,7 +115,7 @@ PROVIDERS: tuple[Provider, ...] = (
             "In HubSpot, open Settings → Integrations → Private Apps.",
             "Create a private app (or open an existing one) and grant it the "
             "crm.objects.contacts.read scope.",
-            "Copy the access token from the app's Auth tab and paste it below.",
+            "Copy the access token from the app’s Auth tab and paste it below.",
         ),
         verify=verify_hubspot,
     ),

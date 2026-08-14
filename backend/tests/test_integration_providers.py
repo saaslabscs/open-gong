@@ -95,7 +95,7 @@ def test_verify_reports_unreachable_provider(monkeypatch, verify):
     monkeypatch.setattr(providers, "_TRANSPORT", httpx.MockTransport(boom))
     result = verify("token")
     assert result.ok is False
-    assert "couldn't reach" in result.error
+    assert "couldn’t reach" in result.error
 
 
 def test_verify_never_echoes_the_token(crm_http):
