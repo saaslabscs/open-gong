@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/", label: "Calls" },
   { href: "/agents", label: "Agents" },
   { href: "/skills", label: "Skills" },
+  { href: "/integrations", label: "Integrations" },
 ];
 
 export default function Nav() {
