@@ -201,9 +201,12 @@ export default function CallView({ id }: { id: string }) {
     );
   }
 
-  // Terminal, but the orchestrator picked no agents — a valid outcome, not an
-  // error and not progress. Say so, and show why.
-  if (agent_runs.length === 0) {
+  // Terminal, but the orchestrator picked no agents *and* there are no
+  // guaranteed insights either — genuinely nothing to show. Say so, and show
+  // why. If insights exist (the summarize/compose_email stages run
+  // independently of agent dispatch), fall through to the tabbed layout below
+  // so the Summary tab can still render them.
+  if (agent_runs.length === 0 && !insights) {
     return (
       <Shell>
         <div className="flex flex-wrap items-start justify-between gap-3">
