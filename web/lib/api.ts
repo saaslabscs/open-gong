@@ -3,6 +3,16 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 export type Evidence = { quote: string; line: number };
+export type Claim = { text: string; evidence: Evidence[] };
+export type Objection = { label: string; detail: string; status?: string; evidence: Evidence[] };
+export type NextStep = { text: string; owner?: string; evidence: Evidence[] };
+export type Insights = {
+  summary?: Claim[];
+  objections?: Objection[];
+  next_steps?: NextStep[];
+  follow_up_email?: { subject: string; body: string };
+  dropped_claims?: number;
+};
 export type RunStatus = "shipped" | "partial" | "failed" | "running" | "pending";
 
 export type CallSummary = {
@@ -12,6 +22,7 @@ export type CallSummary = {
   duration_s: number | null;
   recorded_at: string;
   run_status: RunStatus;
+  agent_count: number;
 };
 
 export type Stage = {
@@ -32,6 +43,7 @@ export type AgentRunSummary = {
   output: Record<string, Record<string, unknown>> | null;
   edited: boolean;
   cost_usd: number;
+  routing_reasoning: string | null;
 };
 
 export type CallDetail = {
@@ -46,6 +58,7 @@ export type CallDetail = {
   run: { status: RunStatus; stages: Stage[]; orchestrator_reasoning: string | null };
   transcript: { language: string; lines: { line: number; speaker: string; text: string }[] } | null;
   agent_runs: AgentRunSummary[];
+  insights: Insights | null;
 };
 
 async function j<T>(res: Response): Promise<T> {

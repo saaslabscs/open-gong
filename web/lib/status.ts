@@ -39,4 +39,6 @@ export const stageLabels: Record<string, string> = {
   "support-scorecard": "Support scorecard",
   "compliance-check": "Compliance check",
   "follow-up-email": "Follow-up email",
+  summarize: "Summary & next steps",
+  compose_email: "Follow-up email",
 };
