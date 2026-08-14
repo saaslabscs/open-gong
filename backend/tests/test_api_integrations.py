@@ -147,3 +147,41 @@ def test_disconnect_removes_the_connection(crm_http):
     assert client.get("/api/integrations").json()[0]["connected"] is False
     # Idempotent: disconnecting an absent connection is not an error.
     assert client.delete("/api/integrations/hubspot").status_code == 200
+
+
+def test_test_marks_a_revoked_token_as_error_but_keeps_the_row(crm_http):
+    crm_http((CONTACTS, 200, {"results": []}), (ACCOUNT, 200, {"portalId": 42}))
+    client.put("/api/integrations/hubspot", json={"token": "pat-na1-goodtoken"})
+
+    # The token has since been revoked in HubSpot.
+    crm_http((CONTACTS, 401, {"message": "invalid"}))
+    resp = client.post("/api/integrations/hubspot/test")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["connected"] is True
+    assert body["status"] == "error"
+    assert "rejected that token" in body["last_error"]
+    # The row survives so the user can see what broke and re-paste a token.
+    assert len(_rows()) == 1
+
+
+def test_test_clears_the_error_once_the_token_works_again(crm_http):
+    from app.db import get_session
+    from app.models import Integration
+
+    with get_session() as session:
+        session.add(Integration(provider="pipedrive", access_token="token", status="error",
+                                last_error="Pipedrive rejected that token (401)."))
+        session.commit()
+
+    crm_http(("users/me", 200, {"data": {"company_name": "Acme Inc", "company_domain": "acme"}}))
+    body = client.post("/api/integrations/pipedrive/test").json()
+    assert body["status"] == "connected"
+    assert body["last_error"] is None
+    assert body["account_label"] == "Acme Inc"
+
+
+def test_test_on_a_provider_that_is_not_connected_is_404():
+    resp = client.post("/api/integrations/hubspot/test")
+    assert resp.status_code == 404
+    assert "isn’t connected" in resp.json()["detail"]

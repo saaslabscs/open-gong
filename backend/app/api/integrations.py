@@ -110,3 +110,28 @@ def disconnect(provider: str) -> dict:
             session.delete(row)
             session.commit()
     return {"ok": True}
+
+
+@router.post("/{provider}/test")
+def test_connection(provider: str) -> dict:
+    """Re-verify the stored token. A failed check is 200 + status=error, not a
+    4xx: the card re-renders from this body, and "the check found a problem"
+    must stay distinguishable from "the check could not run"."""
+    p = _connectable(provider)
+    with get_session() as session:
+        row = session.get(Integration, provider)
+        if row is None:
+            raise HTTPException(404, f"{p.label} isn’t connected")
+
+        result = p.verify(row.access_token)
+        row.last_verified_at = _now()
+        if result.ok:
+            row.status = "connected"
+            row.last_error = None
+            row.account_label = result.account_label or row.account_label
+            row.account_ref = result.account_ref or row.account_ref
+        else:
+            row.status = "error"
+            row.last_error = result.error
+        session.commit()
+        return _serialize(p, row)
