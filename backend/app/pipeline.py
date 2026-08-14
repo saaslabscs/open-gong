@@ -21,7 +21,7 @@ from .db import get_session
 from .entry_rules import resolve_entry_rule
 from .insights import prettify_transcript
 from .jobs import enqueue, handler
-from .models import Agent, AgentRun, AgentSkill, Call, Orchestrator, Run, Skill
+from .models import Agent, AgentRun, AgentSkill, Call, Run, Skill
 from .run_state import BudgetExceeded, StageFailed, max_cost_per_run
 from .skills import executor as executor_mod
 from .transcription import deliver_transcript, update_transcript_lines
@@ -260,14 +260,20 @@ def _dispatch_and_run(call_id: str, run_id: str, preserved_edits: dict[str, dict
 
         entry_agent_id = resolve_entry_rule(session, call)
         enabled_agents = session.scalars(select(Agent).where(Agent.enabled.is_(True))).all()
+        # The agent flagged is_orchestrator (at most one, enforced in api/agents.py)
+        # supplies the dispatch prompt and is excluded from the candidates dispatch()
+        # can select — its job is routing, not producing call notes.
+        orchestrator_agent = next((a for a in enabled_agents if a.is_orchestrator), None)
+        dispatchable_agents = [a for a in enabled_agents if not a.is_orchestrator]
 
         if entry_agent_id:
             selected_ids, reasoning, dispatch_cost = [entry_agent_id], "Entry rule pinned this agent.", 0.0
         else:
-            orch = session.scalars(select(Orchestrator).where(Orchestrator.enabled.is_(True))).first()
-            orch_prompt = orch.system_prompt if orch else "Decide which agents this call needs."
+            orch_prompt = (
+                orchestrator_agent.system_prompt if orchestrator_agent else "Decide which agents this call needs."
+            )
             selected_ids, reasoning, dispatch_cost = orchestrator_mod.dispatch(
-                lines, [_agent_dict(a) for a in enabled_agents], orch_prompt
+                lines, [_agent_dict(a) for a in dispatchable_agents], orch_prompt
             )
 
         selected_agents = [a for a in enabled_agents if a.id in selected_ids]

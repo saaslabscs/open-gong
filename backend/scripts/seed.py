@@ -1,8 +1,13 @@
-"""Seed the database: built-in skills, the Call Summarizer agent, the
-orchestrator, and the five sample calls (re-processed through the real
-agent path — see
+"""Seed the database: built-in skills, the Call Summarizer agent, and the
+five sample calls (re-processed through the real agent path — see
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md
 Known risks #1 for why this requires live API keys).
+
+No agent is seeded with is_orchestrator=True: Call Summarizer needs to
+actually run, and an orchestrator-flagged agent is excluded from the
+dispatchable pool (see pipeline.py). Dispatch falls back to the generic
+default prompt until a user flags one of their own agents as the
+orchestrator via the Agents page.
 
 Idempotent: re-running updates in place (keyed on Call.external_id / Skill
 name / Agent name).
@@ -18,7 +23,7 @@ from sqlalchemy import select
 
 from app.db import Base, engine, get_session
 from app.jobs import enqueue, run_due_jobs
-from app.models import Agent, AgentSkill, Call, Orchestrator, Run, Skill, Transcript
+from app.models import Agent, AgentSkill, Call, Run, Skill, Transcript
 
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "samples"
 
@@ -128,14 +133,6 @@ BUILTIN_SKILLS = [
 
 def seed_agents_and_skills() -> None:
     with get_session() as session:
-        if session.scalars(select(Orchestrator)).first() is None:
-            session.add(Orchestrator(system_prompt=(
-                "Decide which agents this call needs. There is currently one "
-                "agent, Call Summarizer — dispatch it for every call that has "
-                "a transcript, unless the transcript is too short to say "
-                "anything meaningful about."
-            )))
-
         skill_rows = {}
         for spec in BUILTIN_SKILLS:
             row = session.scalars(select(Skill).where(Skill.name == spec["name"])).first()

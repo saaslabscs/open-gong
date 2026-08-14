@@ -16,6 +16,7 @@ def _serialize(a: Agent, skills: list[Skill] | None = None) -> dict:
     out = {
         "id": a.id, "name": a.name, "description": a.description,
         "system_prompt": a.system_prompt, "enabled": a.enabled,
+        "is_orchestrator": a.is_orchestrator,
     }
     if skills is not None:
         out["skills"] = [{"id": s.id, "name": s.name} for s in skills]
@@ -33,6 +34,7 @@ class AgentUpdate(BaseModel):
     description: str | None = None
     system_prompt: str | None = None
     enabled: bool | None = None
+    is_orchestrator: bool | None = None
 
 
 @router.post("")
@@ -82,6 +84,14 @@ def update_agent(agent_id: str, body: AgentUpdate) -> dict:
             agent.system_prompt = body.system_prompt
         if body.enabled is not None:
             agent.enabled = body.enabled
+        if body.is_orchestrator is not None:
+            if body.is_orchestrator:
+                other = session.scalars(
+                    select(Agent).where(Agent.is_orchestrator.is_(True), Agent.id != agent_id)
+                ).first()
+                if other is not None:
+                    raise HTTPException(409, f"'{other.name}' is already the orchestrator")
+            agent.is_orchestrator = body.is_orchestrator
         session.commit()
         return _serialize(agent, _skills_for(session, agent_id))
 

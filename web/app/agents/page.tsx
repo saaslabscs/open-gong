@@ -15,6 +15,12 @@ export default function AgentsPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSystemPrompt, setEditSystemPrompt] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
   const refresh = useCallback(() => {
     listAgents().then(setAgents).catch(() => {});
     listSkills().then(setSkills).catch(() => {});
@@ -22,9 +28,39 @@ export default function AgentsPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  useEffect(() => {
+    if (selected) {
+      setEditName(selected.name);
+      setEditDescription(selected.description);
+      setEditSystemPrompt(selected.system_prompt);
+      setEditError(null);
+    }
+  }, [selected]);
+
   async function openAgent(a: Agent) {
     const full = await getAgent(a.id);
     setSelected(full);
+  }
+
+  async function saveEdits() {
+    if (!selected) return;
+    setEditError(null);
+    if (!editName.trim() || !editDescription.trim() || !editSystemPrompt.trim()) {
+      setEditError("name, description, and system prompt are all required");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateAgent(selected.id, {
+        name: editName, description: editDescription, system_prompt: editSystemPrompt,
+      });
+      await openAgent(selected);
+      refresh();
+    } catch (e) {
+      setEditError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function submit() {
@@ -44,6 +80,22 @@ export default function AgentsPage() {
   async function toggleEnabled(a: Agent) {
     await updateAgent(a.id, { enabled: !a.enabled });
     refresh();
+  }
+
+  async function toggleOrchestrator(a: Agent) {
+    try {
+      await updateAgent(a.id, { is_orchestrator: !a.is_orchestrator });
+      refresh();
+      if (selected?.id === a.id) openAgent(a);
+    } catch (e) {
+      let message = e instanceof Error ? e.message : String(e);
+      try {
+        message = JSON.parse(message).detail ?? message;
+      } catch {
+        // not JSON — show the raw text
+      }
+      alert(message);
+    }
   }
 
   async function remove(a: Agent) {
@@ -97,6 +149,13 @@ export default function AgentsPage() {
                   {a.name}
                 </button>
                 <div className="flex items-center gap-2 text-xs">
+                  <label className="flex items-center gap-1 text-neutral-500">
+                    <input
+                      type="checkbox" checked={a.is_orchestrator}
+                      onChange={() => toggleOrchestrator(a)}
+                    />
+                    Is orchestrator
+                  </label>
                   <button onClick={() => toggleEnabled(a)} className="text-neutral-500 hover:text-neutral-900">
                     {a.enabled ? "Disable" : "Enable"}
                   </button>
@@ -116,6 +175,26 @@ export default function AgentsPage() {
 
       {selected && (
         <div className="w-72 shrink-0 rounded-xl border border-neutral-200 p-4">
+          <h2 className="mb-2 text-sm font-medium">Edit agent</h2>
+          <input
+            value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name"
+            className="mb-2 w-full rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+          <textarea
+            value={editDescription} onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Description (what the orchestrator sees)"
+            className="mb-2 w-full rounded-lg border border-neutral-300 px-3 py-1.5 text-sm" rows={2}
+          />
+          <textarea
+            value={editSystemPrompt} onChange={(e) => setEditSystemPrompt(e.target.value)}
+            placeholder="System prompt (when to use which skill)"
+            className="mb-2 w-full rounded-lg border border-neutral-300 px-3 py-1.5 text-sm" rows={3}
+          />
+          {editError && <p className="mb-2 text-xs text-red-600">{editError}</p>}
+          <button onClick={saveEdits} disabled={saving} className="btn btn-primary mb-4 w-full text-xs">
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+
           <h2 className="mb-2 text-sm font-medium">{selected.name} — skills</h2>
           <ul className="mb-3 space-y-1">
             {(selected.skills ?? []).map((s) => (

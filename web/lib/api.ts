@@ -164,6 +164,7 @@ export type Agent = {
   description: string;
   system_prompt: string;
   enabled: boolean;
+  is_orchestrator: boolean;
   skills?: { id: string; name: string }[];
 };
 
@@ -173,7 +174,7 @@ export const createAgent = (body: { name: string; description: string; system_pr
   fetch(`${API_BASE}/api/agents`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   }).then(j<Agent>);
-export const updateAgent = (id: string, body: Partial<{ name: string; description: string; system_prompt: string; enabled: boolean }>) =>
+export const updateAgent = (id: string, body: Partial<{ name: string; description: string; system_prompt: string; enabled: boolean; is_orchestrator: boolean }>) =>
   fetch(`${API_BASE}/api/agents/${id}`, {
     method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   }).then(j<Agent>);

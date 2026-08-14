@@ -9,7 +9,7 @@ import app.skill_router as skill_router_mod
 import app.skills.executor as executor_mod
 from app.db import get_session
 from app.jobs import run_due_jobs
-from app.models import Agent, AgentRun, Call, Orchestrator, Run, Skill, Transcript
+from app.models import Agent, AgentRun, Call, Run, Skill, Transcript
 from sqlalchemy import select
 
 LINES = [
@@ -21,7 +21,6 @@ LINES = [
 def _seed(agent_names: list[str], skill_names: dict[str, list[str]]) -> tuple[str, dict[str, str], dict[str, str]]:
     """agent_names: list of agent names to create. skill_names: {agent_name: [skill_name, ...]}."""
     with get_session() as session:
-        session.add(Orchestrator(system_prompt="Decide which agents this call needs."))
         agent_ids = {}
         skill_ids = {}
         for name in agent_names:
@@ -179,6 +178,82 @@ def test_aggregate_budget_exceeded_skips_remaining_agents_cleanly(monkeypatch):
         assert run.status == "shipped"  # finalized cleanly, not stuck "running"
         assert "budget" in run.orchestrator_reasoning.lower()
         assert "Knowledgebase" in run.orchestrator_reasoning
+
+
+# --- Orchestrator designation (Agent.is_orchestrator) ------------------------
+# Replaces the standalone Orchestrator table: at most one Agent may carry this
+# flag, its own system_prompt becomes the dispatch prompt, and it is excluded
+# from the pool of agents dispatch() can select — its job is routing, not
+# producing call notes.
+
+
+def test_orchestrator_agent_supplies_prompt_and_is_excluded_from_candidates(monkeypatch):
+    call_id, agent_ids, skill_ids = _seed(
+        ["Router", "Call Summarizer"],
+        {"Call Summarizer": ["plain-summary"]},
+    )
+    with get_session() as session:
+        router = session.get(Agent, agent_ids["Router"])
+        router.is_orchestrator = True
+        router.system_prompt = "Custom routing instructions."
+        session.commit()
+
+    captured = {}
+
+    def fake_dispatch(lines, agents, prompt):
+        captured["agents"] = agents
+        captured["prompt"] = prompt
+        return [agent_ids["Call Summarizer"]], "Dispatched via custom prompt.", 0.001
+
+    monkeypatch.setattr(orchestrator_mod, "dispatch", fake_dispatch)
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([skill_ids["plain-summary"]], "Always run.", 0.001),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A clean call."}, [], 0.01),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    assert captured["prompt"] == "Custom routing instructions."
+    candidate_ids = {a["id"] for a in captured["agents"]}
+    assert agent_ids["Router"] not in candidate_ids
+    assert agent_ids["Call Summarizer"] in candidate_ids
+
+    with get_session() as session:
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()
+        # the orchestrator agent never gets an AgentRun of its own
+        assert {ar.agent_id for ar in agent_runs} == {agent_ids["Call Summarizer"]}
+
+
+def test_no_orchestrator_agent_falls_back_to_default_prompt(monkeypatch):
+    call_id, agent_ids, skill_ids = _seed(["Call Summarizer"], {"Call Summarizer": ["plain-summary"]})
+
+    captured = {}
+
+    def fake_dispatch(lines, agents, prompt):
+        captured["prompt"] = prompt
+        return [agent_ids["Call Summarizer"]], "Dispatched via default.", 0.001
+
+    monkeypatch.setattr(orchestrator_mod, "dispatch", fake_dispatch)
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([skill_ids["plain-summary"]], "Always run.", 0.001),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A clean call."}, [], 0.01),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    assert captured["prompt"] == "Decide which agents this call needs."
 
 
 # --- Task 9 post-review fixes -----------------------------------------------

@@ -1,10 +1,14 @@
-"""New Agent/Skill/Orchestrator/AgentRun/EntryRule tables (Task 1 of the
-agent-skill architecture plan). Purely additive — see
+"""New Agent/Skill/AgentRun/EntryRule tables (Task 1 of the agent-skill
+architecture plan). Purely additive — see
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4.
+
+The standalone Orchestrator table from Task 1 was later removed in favor of
+an `Agent.is_orchestrator` flag — see the orchestrator-designation follow-up
+that replaced it.
 """
 
 from app.db import get_session
-from app.models import Agent, AgentRun, AgentSkill, EntryRule, Orchestrator, Skill
+from app.models import Agent, AgentRun, AgentSkill, EntryRule, Skill
 
 
 def test_agent_round_trips():
@@ -81,17 +85,23 @@ def test_agent_skill_join_links_agent_to_skill():
         assert link is not None
 
 
-def test_orchestrator_singleton_round_trips():
+def test_agent_is_orchestrator_defaults_false_and_round_trips():
     with get_session() as session:
-        orch = Orchestrator(system_prompt="Decide which agents this call needs.")
-        session.add(orch)
+        agent = Agent(name="a", description="d", system_prompt="p")
+        session.add(agent)
         session.commit()
-        orch_id = orch.id
+        agent_id = agent.id
 
     with get_session() as session:
-        row = session.get(Orchestrator, orch_id)
-        assert row.enabled is True
-        assert "which agents" in row.system_prompt
+        assert session.get(Agent, agent_id).is_orchestrator is False
+
+    with get_session() as session:
+        row = session.get(Agent, agent_id)
+        row.is_orchestrator = True
+        session.commit()
+
+    with get_session() as session:
+        assert session.get(Agent, agent_id).is_orchestrator is True
 
 
 def test_agent_run_round_trips_with_parent_seam_unset():

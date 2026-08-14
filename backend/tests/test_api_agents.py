@@ -76,3 +76,38 @@ def test_attach_and_detach_skill():
 
 def test_get_missing_agent_404s():
     assert client.get("/api/agents/does-not-exist").status_code == 404
+
+
+def test_set_is_orchestrator_succeeds_when_none_set():
+    agent = client.post("/api/agents", json={"name": "a", "description": "d", "system_prompt": "p"}).json()
+    assert agent["is_orchestrator"] is False
+
+    resp = client.patch(f"/api/agents/{agent['id']}", json={"is_orchestrator": True})
+    assert resp.status_code == 200
+    assert resp.json()["is_orchestrator"] is True
+
+
+def test_set_is_orchestrator_conflicts_with_existing_orchestrator():
+    first = client.post("/api/agents", json={"name": "First", "description": "d", "system_prompt": "p"}).json()
+    second = client.post("/api/agents", json={"name": "Second", "description": "d", "system_prompt": "p"}).json()
+    client.patch(f"/api/agents/{first['id']}", json={"is_orchestrator": True})
+
+    resp = client.patch(f"/api/agents/{second['id']}", json={"is_orchestrator": True})
+    assert resp.status_code == 409
+    assert "First" in resp.json()["detail"]
+
+    # rejected — second agent's flag must not have flipped
+    assert client.get(f"/api/agents/{second['id']}").json()["is_orchestrator"] is False
+
+
+def test_turning_off_is_orchestrator_frees_the_slot_for_another_agent():
+    first = client.post("/api/agents", json={"name": "First", "description": "d", "system_prompt": "p"}).json()
+    second = client.post("/api/agents", json={"name": "Second", "description": "d", "system_prompt": "p"}).json()
+    client.patch(f"/api/agents/{first['id']}", json={"is_orchestrator": True})
+
+    off = client.patch(f"/api/agents/{first['id']}", json={"is_orchestrator": False})
+    assert off.status_code == 200
+
+    resp = client.patch(f"/api/agents/{second['id']}", json={"is_orchestrator": True})
+    assert resp.status_code == 200
+    assert resp.json()["is_orchestrator"] is True

@@ -100,6 +100,11 @@ class Agent(Base):
     description: Mapped[str] = mapped_column(Text)  # what the orchestrator sees
     system_prompt: Mapped[str] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # at most one Agent may have this set — enforced in api/agents.py, not the DB.
+    # When set, this agent's system_prompt is used as the dispatch-decision prompt
+    # instead of the generic default, and this agent is excluded from the pool of
+    # agents dispatch() can select (its job is routing, not producing call notes).
+    is_orchestrator: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -124,14 +129,6 @@ class AgentSkill(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
     skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id"))
-
-
-class Orchestrator(Base):
-    __tablename__ = "orchestrators"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    system_prompt: Mapped[str] = mapped_column(Text)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class AgentRun(Base):
