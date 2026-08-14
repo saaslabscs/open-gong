@@ -26,11 +26,29 @@ export default function InsightsPanel({
     );
   }
 
-  const { summary, objections, next_steps, follow_up_email } = insights;
+  const { summary, objections, next_steps, follow_up_email, dropped_claims } = insights;
+
+  const hasSummary = !!summary?.length;
+  const hasNextSteps = !!next_steps?.length;
+  const hasObjections = !!objections?.length;
+  const hasEmail = !!follow_up_email;
+
+  const hasContent = hasSummary || hasNextSteps || hasObjections || hasEmail;
+
+  if (!hasContent) {
+    const message = dropped_claims && dropped_claims > 0
+      ? `No claims with evidence to show (${dropped_claims} claims dropped).`
+      : "No summary for this call yet.";
+    return (
+      <div className="card text-sm text-neutral-500">
+        {message}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {!!summary?.length && (
+      {hasSummary && (
         <section className="card">
           <h2 className="eyebrow">Summary</h2>
           <ul className="mt-3 space-y-2 text-sm">
@@ -44,7 +62,7 @@ export default function InsightsPanel({
         </section>
       )}
 
-      {!!next_steps?.length && (
+      {hasNextSteps && (
         <section className="card">
           <h2 className="eyebrow">Next steps</h2>
           <ul className="mt-3 space-y-2 text-sm">
@@ -59,7 +77,7 @@ export default function InsightsPanel({
         </section>
       )}
 
-      {!!objections?.length && (
+      {hasObjections && (
         <section className="card">
           <h2 className="eyebrow">Objections</h2>
           <ul className="mt-3 space-y-3 text-sm">
@@ -77,7 +95,7 @@ export default function InsightsPanel({
         </section>
       )}
 
-      {follow_up_email && <FollowUpEmail email={follow_up_email} />}
+      {hasEmail && <FollowUpEmail email={follow_up_email} />}
     </div>
   );
 }
