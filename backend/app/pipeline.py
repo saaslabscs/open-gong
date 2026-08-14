@@ -353,9 +353,13 @@ def run_insights(payload: dict) -> None:
         rs._get("summarize").dropped_claims = len(drops)
         return cleaned
 
-    if not _reuse_completed_stage(
+    # Reuse a stage only when the artifact it produces is actually stored: an
+    # `ok` stage with nothing behind it (an older row, a hand-edited database)
+    # must regenerate rather than ship an empty summary.
+    reuse_summary = bool(prior_insights) and _reuse_completed_stage(
         rs, "summarize", prior_stages, dropped_claims=_dropped_count(prior_insights)
-    ):
+    )
+    if not reuse_summary:
         try:
             baseline.update(rs.execute("summarize", do_summarize))
         except (StageFailed, BudgetExceeded):
@@ -380,7 +384,14 @@ def run_insights(payload: dict) -> None:
         rs.charge("compose_email", cost)
         return email
 
-    if not _reuse_completed_stage(rs, "compose_email", prior_stages):
+    # A fresh summary needs a fresh email: one drafted from the previous summary
+    # could promise things the new notes no longer contain.
+    reuse_email = (
+        reuse_summary
+        and bool(baseline.get("follow_up_email"))
+        and _reuse_completed_stage(rs, "compose_email", prior_stages)
+    )
+    if not reuse_email:
         try:
             baseline["follow_up_email"] = rs.execute("compose_email", do_email)
         except (StageFailed, BudgetExceeded):
