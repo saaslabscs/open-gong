@@ -21,6 +21,9 @@ export default function Home() {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A re-sent file/link is deduped by the backend (created: false) and no job is
+  // queued — without this the UI renders no change and the button looks dead.
+  const [duplicateOf, setDuplicateOf] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   const [drag, setDrag] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -39,12 +42,14 @@ export default function Home() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  async function ingest(fn: () => Promise<unknown>) {
+  async function ingest(fn: () => Promise<{ call_id: string; created: boolean }>) {
     setBusy(true);
     setError(null);
+    setDuplicateOf(null);
     try {
-      await fn();
+      const { call_id, created } = await fn();
       await refresh();
+      if (!created) setDuplicateOf(call_id);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -96,12 +101,28 @@ export default function Home() {
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && url.trim() && ingest(() => ingestUrl(url.trim()).then(() => setUrl("")))}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                url.trim() &&
+                ingest(async () => {
+                  const r = await ingestUrl(url.trim());
+                  setUrl("");
+                  return r;
+                })
+              }
               placeholder="paste a recording link"
               className="w-56 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
             />
           </div>
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+          {duplicateOf && (
+            <p className="mt-2 text-xs text-neutral-500">
+              Already ingested — nothing new to process.{" "}
+              <Link href={`/calls/${duplicateOf}`} className="font-medium text-neutral-800 underline">
+                Open the existing call
+              </Link>
+            </p>
+          )}
         </div>
 
         {/* Calls */}
