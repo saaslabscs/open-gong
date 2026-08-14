@@ -223,3 +223,38 @@ export const resetAgentRunOutput = (callId: string, agentRunId: string) =>
   fetch(`${API_BASE}/api/calls/${callId}/agent-runs/${agentRunId}/reset`, { method: "POST" }).then(
     j<{ ok: boolean; edited: boolean }>,
   );
+
+// A provider's catalog entry merged with its connection state. `connected`
+// false means no row exists — there is no "disconnected" status value.
+export type Integration = {
+  key: string;
+  label: string;
+  blurb: string;
+  available: boolean;
+  token_label: string | null;
+  docs_url: string | null;
+  setup_steps: string[];
+  connected: boolean;
+  status: "connected" | "error" | null;
+  account_label: string | null;
+  token_hint: string | null;
+  last_error: string | null;
+  connected_at: string | null;
+  last_verified_at: string | null;
+};
+
+export const listIntegrations = () =>
+  fetch(`${API_BASE}/api/integrations`, { cache: "no-store" }).then(j<Integration[]>);
+
+export const connectIntegration = (key: string, token: string) =>
+  fetch(`${API_BASE}/api/integrations/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  }).then(j<Integration>);
+
+export const testIntegration = (key: string) =>
+  fetch(`${API_BASE}/api/integrations/${key}/test`, { method: "POST" }).then(j<Integration>);
+
+export const disconnectIntegration = (key: string) =>
+  fetch(`${API_BASE}/api/integrations/${key}`, { method: "DELETE" }).then(j<{ ok: boolean }>);
