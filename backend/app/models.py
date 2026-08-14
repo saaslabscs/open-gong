@@ -164,3 +164,21 @@ class EntryRule(Base):
     match_kind: Mapped[str] = mapped_column(String)  # phone_line | source
     match_value: Mapped[str] = mapped_column(String)
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"))
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+
+    # One connection per provider, so every write is naturally idempotent.
+    provider: Mapped[str] = mapped_column(String, primary_key=True)  # hubspot | pipedrive
+    # Plaintext by design: the SQLite file is local and gitignored, and a key
+    # stored beside its own ciphertext defends against nothing. Never returned
+    # by the API, never logged — see the integrations design doc §6.
+    access_token: Mapped[str] = mapped_column(String)
+    account_label: Mapped[str | None] = mapped_column(String, nullable=True)
+    # HubSpot portal id / Pipedrive company_domain — the sync feature needs it.
+    account_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="connected")  # connected | error
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
