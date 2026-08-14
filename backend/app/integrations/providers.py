@@ -8,6 +8,7 @@ missing the scope fails here, at connect time, instead of at first sync.
 """
 
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 
 import httpx
@@ -73,15 +74,16 @@ def verify_hubspot(token: str) -> VerifyResult:
             # scope and only exposes a portal id, so a private app without that
             # scope still connects — just without a friendly name.
             label = ref = None
-            info = client.get(f"{HUBSPOT_API}/account-info/v3/details", headers=headers)
-            if info.status_code < 300:
-                portal = info.json().get("portalId")
-                if portal:
-                    ref = str(portal)
-                    label = f"Portal {ref}"
+            with suppress(httpx.HTTPError):
+                info = client.get(f"{HUBSPOT_API}/account-info/v3/details", headers=headers)
+                if info.status_code < 300:
+                    portal = info.json().get("portalId")
+                    if portal:
+                        ref = str(portal)
+                        label = f"Portal {ref}"
             return VerifyResult(ok=True, account_label=label, account_ref=ref)
     except httpx.HTTPError as e:
-        return VerifyResult(ok=False, error=f"couldn't reach HubSpot: {e}")
+        return VerifyResult(ok=False, error=f"couldn’t reach HubSpot: {e}")
 
 
 def verify_pipedrive(token: str) -> VerifyResult:
@@ -89,7 +91,7 @@ def verify_pipedrive(token: str) -> VerifyResult:
         with _client() as client:
             resp = client.get(f"{PIPEDRIVE_API}/users/me", headers={"x-api-token": token})
     except httpx.HTTPError as e:
-        return VerifyResult(ok=False, error=f"couldn't reach Pipedrive: {e}")
+        return VerifyResult(ok=False, error=f"couldn’t reach Pipedrive: {e}")
     if resp.status_code >= 300:
         return VerifyResult(ok=False, error=_rejection(resp, "Pipedrive"))
     data = resp.json().get("data") or {}
@@ -113,7 +115,7 @@ PROVIDERS: tuple[Provider, ...] = (
             "In HubSpot, open Settings → Integrations → Private Apps.",
             "Create a private app (or open an existing one) and grant it the "
             "crm.objects.contacts.read scope.",
-            "Copy the access token from the app's Auth tab and paste it below.",
+            "Copy the access token from the app’s Auth tab and paste it below.",
         ),
         verify=verify_hubspot,
     ),

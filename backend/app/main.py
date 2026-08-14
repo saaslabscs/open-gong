@@ -17,6 +17,7 @@ from sqlalchemy import select
 from . import pipeline  # noqa: F401 — registers job handlers
 from .api.agents import router as agents_router
 from .api.ingest import router as ingest_router
+from .api.integrations import router as integrations_router
 from .api.packs import router as packs_router
 from .api.review import router as review_router
 from .api.share import router as share_router
@@ -75,6 +76,7 @@ app.add_middleware(
 
 app.include_router(agents_router)
 app.include_router(ingest_router)
+app.include_router(integrations_router)
 app.include_router(webhooks_router)
 app.include_router(review_router)
 app.include_router(share_router)
