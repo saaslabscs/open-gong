@@ -1,0 +1,227 @@
+<title>Atlas Freight — Voice Agent Quote</title>
+<style>
+  :root {
+    --paper: #EDEEF3;
+    --paper-raised: #E2E4EB;
+    --paper-line: #C7CBD6;
+    --ink: #10131A;
+    --ink-soft: #4A5164;
+    --ink-faint: #848AA0;
+    --accent: #2E3EE8;
+    --accent-deep: #1B2699;
+    --accent-soft: rgba(46, 62, 232, 0.09);
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --font-sans: -apple-system, "Segoe UI", "Helvetica Neue", Roboto, Ubuntu, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12141B; --paper-raised: #191C24; --paper-line: #2B2F3D;
+      --ink: #ECEDF2; --ink-soft: #ABB0C0; --ink-faint: #676D80;
+      --accent: #7482FF; --accent-deep: #B4BCFF; --accent-soft: rgba(116, 130, 255, 0.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12141B; --paper-raised: #191C24; --paper-line: #2B2F3D;
+    --ink: #ECEDF2; --ink-soft: #ABB0C0; --ink-faint: #676D80;
+    --accent: #7482FF; --accent-deep: #B4BCFF; --accent-soft: rgba(116, 130, 255, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: var(--paper); }
+
+  .deck { height: 100vh; overflow-y: auto; overflow-x: hidden; scroll-snap-type: y mandatory; }
+  .slide {
+    min-height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center;
+    scroll-snap-align: start; position: relative; border-bottom: 1px solid var(--paper-line);
+    padding: clamp(28px, 7vw, 96px);
+  }
+  .slide-inner { max-width: 1040px; width: 100%; margin: 0 auto; }
+
+  .kicker {
+    font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .kicker::before { content: ""; width: 22px; height: 1px; background: var(--accent); display: inline-block; }
+
+  h1, h2 { text-wrap: balance; margin: 0; }
+  h1 {
+    font-family: var(--font-mono); font-weight: 700; letter-spacing: -0.01em;
+    font-size: clamp(2.1rem, 4.6vw, 3.9rem); line-height: 1.12; color: var(--ink);
+  }
+  h2 {
+    font-family: var(--font-mono); font-weight: 700; letter-spacing: -0.01em;
+    font-size: clamp(1.5rem, 3vw, 2.1rem); color: var(--ink); margin-bottom: 8px;
+  }
+  p.lede {
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem); line-height: 1.65; color: var(--ink-soft);
+    max-width: 62ch; margin: 22px 0 0;
+  }
+
+  .rail {
+    position: fixed; left: clamp(10px, 2vw, 28px); top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 18px; z-index: 30;
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-faint);
+  }
+  .rail a { color: inherit; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+  .rail .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--paper-line); transition: background 0.2s, transform 0.2s; }
+  .rail a[aria-current="true"] { color: var(--accent); }
+  .rail a[aria-current="true"] .dot { background: var(--accent); transform: scale(1.6); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  @media (max-width: 720px) {
+    .rail { left: 50%; top: auto; bottom: 14px; transform: translateX(-50%); flex-direction: row; gap: 22px; }
+  }
+
+  /* ---- hero: the seal ---- */
+  .seal {
+    width: clamp(126px, 15vw, 172px); height: clamp(126px, 15vw, 172px); border-radius: 50%;
+    border: 3px solid var(--accent); position: relative; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transform: rotate(-9deg);
+    opacity: 0.94;
+  }
+  .seal::before { content: ""; position: absolute; inset: 9px; border: 1px solid var(--accent); border-radius: 50%; }
+  .seal-text {
+    font-family: var(--font-mono); font-weight: 700; font-size: 0.68rem; letter-spacing: 0.1em;
+    text-transform: uppercase; text-align: center; color: var(--accent); line-height: 1.55; padding: 0 12px;
+  }
+  .hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; flex-wrap: wrap; }
+  @media (prefers-reduced-motion: no-preference) {
+    .seal { animation: seal-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+  }
+  @keyframes seal-in { from { opacity: 0; transform: rotate(-30deg) scale(0.6); } to { opacity: 0.94; transform: rotate(-9deg) scale(1); } }
+
+  /* ---- receipt: the actual quote ---- */
+  .receipt {
+    background: var(--paper-raised); border: 1px solid var(--paper-line); border-radius: 4px;
+    padding: clamp(22px, 3.4vw, 36px); font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  }
+  .receipt-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; color: var(--ink-faint); letter-spacing: 0.04em; }
+  .receipt hr { border: none; border-top: 1px dashed var(--paper-line); margin: 16px 0; }
+  .receipt-group { margin: 22px 0; }
+  .receipt-group-label { font-size: 0.7rem; letter-spacing: 0.14em; color: var(--ink-faint); text-transform: uppercase; margin-bottom: 10px; }
+  .receipt-row { display: flex; align-items: baseline; gap: 10px; font-size: 0.98rem; color: var(--ink); padding: 5px 0; }
+  .receipt-row .fill { flex: 1 1 auto; border-bottom: 1px dotted var(--paper-line); min-width: 20px; margin-bottom: 5px; }
+  .receipt-row .value { color: var(--ink-soft); white-space: nowrap; }
+  .receipt-note { font-size: 0.82rem; color: var(--ink-faint); margin: -2px 0 0; padding-left: 2px; }
+  .verified-tag {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 0.66rem; letter-spacing: 0.08em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px; margin-left: 8px;
+    transform: rotate(-2deg); white-space: nowrap;
+  }
+  .receipt-total { display: flex; justify-content: space-between; gap: 16px; padding-top: 16px; font-size: 0.92rem; color: var(--ink); font-weight: 600; }
+
+  /* ---- close: what happens next ---- */
+  .close-line {
+    margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--paper-line);
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 16px;
+  }
+  .close-line p { margin: 0; font-size: 1.12rem; color: var(--ink); max-width: 46ch; }
+  .close-line .cta {
+    font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); text-decoration: none;
+    border-bottom: 1px solid var(--accent); padding-bottom: 2px; white-space: nowrap;
+  }
+  .close-line .cta:hover { color: var(--accent-deep); border-color: var(--accent-deep); }
+
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<nav class="rail" aria-label="Slides">
+  <a href="#one" aria-current="true"><span class="dot"></span>01</a>
+  <a href="#two"><span class="dot"></span>02</a>
+  <a href="#three"><span class="dot"></span>03</a>
+</nav>
+
+<div class="deck" id="deck">
+
+  <section class="slide" id="one">
+    <div class="slide-inner">
+      <p class="kicker">Atlas Freight — Voice Agent Pricing</p>
+      <div class="hero-row">
+        <h1>Here's exactly<br>what we quoted —<br>and why.</h1>
+        <div class="seal" aria-hidden="true">
+          <div class="seal-text">Verified<br>Every<br>Line</div>
+        </div>
+      </div>
+      <p class="lede">
+        Atlas Freight routes about 10,000 minutes a month through support and asked
+        for voice-agent pricing at that volume, plus seat licenses for the ops and
+        QA team to review calls. Every number below traces back to that conversation.
+      </p>
+    </div>
+  </section>
+
+  <section class="slide" id="two">
+    <div class="slide-inner">
+      <p class="kicker">The quote</p>
+      <h2>Line items, priced at your volume</h2>
+      <div class="receipt">
+        <div class="receipt-head"><span>OPEN GONG</span><span>QUOTE — ATLAS FREIGHT</span></div>
+        <hr>
+        <div class="receipt-group">
+          <div class="receipt-group-label">Voice agent usage</div>
+          <div class="receipt-row"><span>10,000 min/mo × $0.45/min</span><span class="fill"></span><span class="value">$4,500.00/mo<span class="verified-tag">checked ✓</span></span></div>
+          <p class="receipt-note">"we're routing about ten thousand minutes a month through our support line" — line 2</p>
+          <p class="receipt-note">"forty-five cents per minute, so zero point four five dollars per minute" — line 3</p>
+        </div>
+        <div class="receipt-group">
+          <div class="receipt-group-label">Platform licenses</div>
+          <div class="receipt-row"><span>10 users × $69/user/mo</span><span class="fill"></span><span class="value">$690.00/mo<span class="verified-tag">checked ✓</span></span></div>
+          <p class="receipt-note">"Licenses are sixty-nine dollars per user per month." — line 5</p>
+          <p class="receipt-note">"We'd start with ten licenses for the ops and QA team." — line 6</p>
+        </div>
+        <hr>
+        <div class="receipt-total"><span>Total</span><span>$5,190.00/month</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="three">
+    <div class="slide-inner">
+      <p class="kicker">What happens next</p>
+      <h2>Meera sends this to Owen — today</h2>
+      <p class="lede">
+        Owen asked for a written quote to bring to finance this week. The follow-up
+        email below is the guaranteed baseline Open Gong drafted the moment the call
+        ended — same two line items, same total, ready to send.
+      </p>
+
+      <div class="receipt" style="margin-top: 28px;">
+        <div class="receipt-head"><span>DRAFT EMAIL</span><span>Your Open Gong voice agent quote — Atlas Freight</span></div>
+        <hr>
+        <p class="receipt-note" style="font-size:0.92rem; color:var(--ink); line-height:1.7;">
+          Hi Owen,<br><br>
+          Great speaking today. As promised, here's the pricing we discussed:<br><br>
+          — Voice agent usage: 10,000 min/mo × $0.45/min = $4,500.00/mo<br>
+          — Platform licenses: 10 users × $69/user/mo = $690.00/mo<br>
+          — Total: $5,190.00/mo<br><br>
+          Let me know if finance has questions.<br><br>
+          Best,<br>Meera
+        </p>
+      </div>
+
+      <div class="close-line">
+        <p>Every claim in this deck has a receipt — trace it back to the call.</p>
+        <a class="cta" href="#one">↑ Back to the top</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+    var sections = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var idx = sections.indexOf(entry.target);
+        links.forEach(function (a, i) { a.setAttribute('aria-current', i === idx ? 'true' : 'false'); });
+      });
+    }, { root: document.getElementById('deck'), threshold: 0.6 });
+    sections.forEach(function (s) { if (s) io.observe(s); });
+  })();
+</script>
