@@ -169,6 +169,7 @@ def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str,
         with get_session() as session:
             agent_run = session.get(AgentRun, agent_run_id)
             agent_run.steps = rs.as_dicts()
+            agent_run.routing_reasoning = router_reasoning
             agent_run.status = rs.final_status()
             agent_run.output = output or None
             agent_run.cost_usd = round(total_cost, 4)

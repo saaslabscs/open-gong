@@ -150,6 +150,9 @@ class AgentRun(Base):
     edited_output: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # human review edits
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Why the skill router selected what it did. Without this, an agent run with
+    # zero steps is indistinguishable from one that silently did nothing.
+    routing_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

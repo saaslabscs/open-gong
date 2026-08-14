@@ -5,6 +5,7 @@ docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, §5.
 """
 
 import app.orchestrator as orchestrator_mod
+import app.pipeline as pipeline
 import app.skill_router as skill_router_mod
 import app.skills.executor as executor_mod
 from app.db import get_session
@@ -408,3 +409,29 @@ def test_route_skills_raising_fails_only_that_agent(monkeypatch):
 
         run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
         assert run.status == "partial"  # one agent shipped, one failed
+
+
+def test_router_reasoning_is_persisted_when_no_skills_apply(monkeypatch):
+    """An agent that legitimately did nothing must still say why.
+
+    Zero steps plus a NULL output is exactly the empty card the UI used to show:
+    a green "shipped" badge over no content and no explanation anywhere.
+    """
+    call_id, agent_ids, _ = _seed(["QA agent"], {"QA agent": ["deck-creator"]})
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: ([agent_ids["QA agent"]], "QA should look at this.", 0.002),
+    )
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([], "No follow-up date was booked.", 0.002),
+    )
+
+    pipeline.run_insights({"call_id": call_id})
+
+    with get_session() as session:
+        ar = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).one()
+        assert ar.steps == []
+        assert ar.output is None
+        assert ar.routing_reasoning == "No follow-up date was booked."
