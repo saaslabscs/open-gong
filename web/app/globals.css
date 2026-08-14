@@ -54,3 +54,56 @@ body {
 .flash {
   animation: evidence-flash 1.6s ease-out;
 }
+
+/* Agent workspace figurines — idle breathing, walk-cycle limb swing, and the
+   little paper token that hops between orchestrator and whichever station it
+   actually visited. Motion is cosmetic on top of a station's real status, so
+   it's safe to fully disable under reduced-motion. */
+@keyframes figurine-idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+@keyframes figurine-limb-l {
+  0%, 100% { transform: rotate(-16deg); }
+  50% { transform: rotate(16deg); }
+}
+@keyframes figurine-limb-r {
+  0%, 100% { transform: rotate(16deg); }
+  50% { transform: rotate(-16deg); }
+}
+@keyframes figurine-think {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1.5px); }
+}
+@keyframes paper-hop {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(-6deg); }
+}
+@keyframes station-pulse {
+  0%, 100% { opacity: 0.35; r: 26; }
+  50% { opacity: 0.08; r: 32; }
+}
+@keyframes figurine-spawn-pop {
+  0%, 100% { opacity: 0.25; transform: scale(0.6) translateY(4px); }
+  50% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.figurine-idle { animation: figurine-idle-bob 2.6s ease-in-out infinite; }
+.figurine-limb-l { animation: figurine-limb-l 0.6s ease-in-out infinite; transform-box: fill-box; transform-origin: top center; }
+.figurine-limb-r { animation: figurine-limb-r 0.6s ease-in-out infinite; transform-box: fill-box; transform-origin: top center; }
+.figurine-think { animation: figurine-think 1s ease-in-out infinite; }
+.paper-token { animation: paper-hop 0.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.station-pulse { animation: station-pulse 1.8s ease-out infinite; }
+.figurine-spawn-pop { animation: figurine-spawn-pop 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .figurine-idle,
+  .figurine-limb-l,
+  .figurine-limb-r,
+  .figurine-think,
+  .paper-token,
+  .station-pulse,
+  .figurine-spawn-pop {
+    animation: none !important;
+  }
+}
