@@ -16,6 +16,7 @@ from app.jobs import run_due_jobs
 from app.main import app
 from app.models import Run
 from fakes import fake_llm
+from test_ingest import WAV_BYTE_RATE, _serve, _wav
 
 WAV = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" + b"\x00" * 20
 
@@ -126,3 +127,27 @@ def test_retry_does_not_compound_run_cost(monkeypatch):
     with get_session() as session:
         run = session.get(Run, run_id)
         assert run.cost_usd == first_attempt_cost  # one attempt's cost, not two
+
+
+def test_identifier_titles_are_replaced_after_summarizing(monkeypatch, url_ingest):
+    # The evidence quote must actually verify against the mock adapter's CANNED
+    # transcript (app/adapters/pyai/mock.py) — the URL-ingested audio's hash-derived
+    # filename never matches a fixtures/samples/*.json stem, so CANNED is what's
+    # transcribed here, and the evidence gate would otherwise drop this claim,
+    # leaving summary empty and defeating the point of the test.
+    monkeypatch.setattr(
+        insights.llm,
+        "complete_json",
+        fake_llm({"extract": {
+            "summary": [{"text": "Caller asked to be transferred to billing.",
+                         "evidence": [{"quote": "thanks for calling", "line": 1}]}],
+            "objections": [], "next_steps": [],
+        }}),
+    )
+    url_ingest(_serve(_wav(WAV_BYTE_RATE * 3), honor_range=True))
+    with TestClient(app) as c:
+        call_id = c.post(
+            "/api/ingest/url", json={"url": "https://x.test/stream/CA1/RE0123456789abcdef0123456789abcdef"}
+        ).json()["call_id"]
+        _drain()
+        assert c.get(f"/api/calls/{call_id}").json()["call"]["title"] != "RE0123456789abcdef0123456789abcdef"

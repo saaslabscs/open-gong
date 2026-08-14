@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.db as db
 import app.llm as llm_mod
+from app.api import ingest as ingest_mod
 from app.db import Base
 
 from fakes import fake_llm
@@ -37,3 +38,14 @@ def isolated_db(monkeypatch):
     monkeypatch.setattr(db, "SessionLocal", sessionmaker(bind=engine, expire_on_commit=False))
     Base.metadata.create_all(engine)
     yield engine
+
+
+@pytest.fixture
+def url_ingest(monkeypatch, tmp_path):
+    """Point URL ingestion at a temp uploads dir and an injectable transport."""
+    monkeypatch.setattr(ingest_mod, "UPLOADS_DIR", tmp_path)
+
+    def install(transport):
+        monkeypatch.setattr(ingest_mod, "_TRANSPORT", transport)
+
+    return install

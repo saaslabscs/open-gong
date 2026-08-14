@@ -9,6 +9,7 @@ call's Run status aggregates across all its AgentRuns. See
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, §5.
 """
 
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
@@ -186,6 +187,20 @@ def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str,
         return 0.0
 
 
+_ID_TITLE = re.compile(r"^(RE|CA)?[0-9a-f]{16,}$", re.I)
+
+
+def _derive_title(current: str, baseline: dict) -> str | None:
+    """A bare recording id tells a reader nothing. Use the first summary claim."""
+    if not _ID_TITLE.match(current or ""):
+        return None
+    claims = baseline.get("summary") or []
+    if not claims:
+        return None
+    text = claims[0]["text"].strip()
+    return text[:70].rstrip(" .,;:") if text else None
+
+
 def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict, dropped: list[dict]) -> None:
     """Write the baseline stages and insights onto the Run.
 
@@ -202,6 +217,9 @@ def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict, dropped: l
         run.stages = merged
         run.insights = baseline or None
         run.cost_usd = round((run.cost_usd or 0.0) + rs.spent, 4)
+        new_title = _derive_title(run.call.title, baseline)
+        if new_title:
+            run.call.title = new_title
         session.commit()
 
 

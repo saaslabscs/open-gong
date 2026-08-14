@@ -70,17 +70,6 @@ def _serve(payload: bytes, *, cap: int | None = None, honor_range: bool = True):
     return httpx.MockTransport(handler)
 
 
-@pytest.fixture
-def url_ingest(monkeypatch, tmp_path):
-    """Point URL ingestion at a temp uploads dir and an injectable transport."""
-    monkeypatch.setattr(ingest_mod, "UPLOADS_DIR", tmp_path)
-
-    def install(transport):
-        monkeypatch.setattr(ingest_mod, "_TRANSPORT", transport)
-
-    return install
-
-
 def _audio_path_of(call_id: str) -> str:
     with get_session() as session:
         return session.scalars(select(Call).where(Call.id == call_id)).one().audio_path
