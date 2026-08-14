@@ -163,9 +163,8 @@ export default function CallView({ id }: { id: string }) {
   // "Still working" is a property of the run's status, not of how many agent
   // runs exist yet. A run that legitimately shipped with zero dispatched
   // agents is terminal — the poll below never re-fires for it, so showing a
-  // spinner there would be a permanent lie. (No transcript still means
-  // transcription is in flight, which genuinely is progress.)
-  if (!transcript || run.status === "running" || run.status === "pending") {
+  // spinner there would be a permanent lie.
+  if (run.status === "running" || run.status === "pending") {
     return (
       <Shell>
         <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
@@ -173,6 +172,24 @@ export default function CallView({ id }: { id: string }) {
           <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
           {transcript ? "Writing the notes…" : "Transcribing the call…"} This updates on its own.
         </div>
+      </Shell>
+    );
+  }
+
+  // Terminal, but transcription itself never produced a transcript (e.g. bad
+  // audio, an upstream API error). Without this branch, a permanently failed
+  // transcription looked identical to "still transcribing" forever — the
+  // poll above never re-fires for a terminal status, so the user would be
+  // stuck staring at a spinner that describes progress that isn't happening.
+  if (!transcript) {
+    const transcribeStage = run.stages.find((s) => s.name === "transcribe");
+    return (
+      <Shell>
+        <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
+        <p className="mt-6 text-sm text-neutral-600">
+          Transcription failed{transcribeStage?.error ? `: ${transcribeStage.error}` : "."}
+        </p>
+        <button onClick={doRetry} disabled={busy} className="btn btn-warn mt-4">Retry</button>
       </Shell>
     );
   }
