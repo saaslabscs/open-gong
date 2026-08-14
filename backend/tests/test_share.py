@@ -36,7 +36,7 @@ AGENT_OUTPUT = {
 }
 
 
-def _seed(run_status="shipped", agent_run_status="shipped", transcript=True, output=AGENT_OUTPUT):
+def _seed(run_status="shipped", agent_run_status="shipped", transcript=True, output=AGENT_OUTPUT, insights=None):
     with get_session() as session:
         call = Call(title="Billing call", source="upload", external_id=f"s-{uuid.uuid4().hex}", duration_s=120)
         session.add(call)
@@ -46,6 +46,7 @@ def _seed(run_status="shipped", agent_run_status="shipped", transcript=True, out
         run = Run(
             call_id=call.id, status=run_status,
             stages=[{"name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None}],
+            insights=insights,
         )
         session.add(run)
         session.flush()
@@ -122,8 +123,14 @@ def test_markdown_excludes_compliance():
 
 
 def test_share_link_freezes_snapshot_and_excludes_transcript():
+    insights = {
+        "summary": [{"text": "Bob was double-charged.", "evidence": [{"quote": "charged twice", "line": 2}]}],
+        "objections": [],
+        "next_steps": [],
+        "follow_up_email": None,
+    }
     with TestClient(app) as c:
-        call_id, agent_run_id = _seed()
+        call_id, agent_run_id = _seed(insights=insights)
         token = c.post(f"/api/calls/{call_id}/share").json()["token"]
 
         # edit AFTER sharing — the shared page must not change
@@ -135,10 +142,11 @@ def test_share_link_freezes_snapshot_and_excludes_transcript():
         # The public /share/[token] page types and renders exactly this shape
         # (web/lib/api.ts: ShareSnapshot / SharedAgentRun) — a silent change
         # here breaks that page at runtime, not at build time.
-        assert set(snap) == {"title", "recorded_at", "duration_s", "agent_runs"}
+        assert set(snap) == {"title", "recorded_at", "duration_s", "agent_runs", "insights"}
         assert set(snap["agent_runs"][0]) == {"agent_name", "output", "edited"}
         frozen_summary = snap["agent_runs"][0]["output"]["summary-and-next-steps"]["summary"]
         assert frozen_summary[0]["text"] == "Bob was double-charged."  # frozen
+        assert snap["insights"]["summary"][0]["text"] == "Bob was double-charged."  # guaranteed baseline carried through
         assert "transcript" not in snap
         for ao in snap["agent_runs"]:
             assert "compliance-check" not in ao["output"]
@@ -185,3 +193,20 @@ def test_retry_reprocesses_when_no_transcript():
             session.commit()
         r = c.post(f"/api/calls/{call_id}/retry")
         assert r.json()["from_stage"] == "process_call"
+
+
+def test_markdown_export_includes_the_summary_with_citations():
+    from app.render import render_insights_markdown
+
+    md = render_insights_markdown({
+        "summary": [{"text": "Eleven AMs log half their calls.",
+                     "evidence": [{"quote": "eleven account managers", "line": 4}]}],
+        "objections": [],
+        "next_steps": [{"text": "Maya sends docs.", "owner": "Maya",
+                        "evidence": [{"quote": "I'll send you our security overview", "line": 31}]}],
+        "follow_up_email": {"subject": "Security docs", "body": "Hi Daniel,"},
+    })
+    assert "Eleven AMs log half their calls." in md
+    assert "[L4]" in md
+    assert "Maya sends docs." in md
+    assert "Security docs" in md

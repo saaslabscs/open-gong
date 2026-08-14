@@ -42,6 +42,42 @@ def _cite(evidence: list) -> str:
     return " " + " ".join(f"[L{e['line']}]" for e in evidence)
 
 
+def render_insights_markdown(insights: dict | None) -> str:
+    """The guaranteed baseline as Markdown, citations inline."""
+    if not insights:
+        return ""
+    parts: list[str] = []
+
+    if insights.get("summary"):
+        parts.append("## Summary\n")
+        for claim in insights["summary"]:
+            parts.append(f"- {claim['text']}{_cite(claim.get('evidence', []))}")
+        parts.append("")
+
+    if insights.get("objections"):
+        parts.append("## Objections\n")
+        for o in insights["objections"]:
+            status = f" _({o['status']})_" if o.get("status") else ""
+            parts.append(f"- **{o['label']}**{status} — {o.get('detail', '')}{_cite(o.get('evidence', []))}")
+        parts.append("")
+
+    if insights.get("next_steps"):
+        parts.append("## Next steps\n")
+        for s in insights["next_steps"]:
+            owner = f"**{s['owner']}** — " if s.get("owner") else ""
+            parts.append(f"- {owner}{s['text']}{_cite(s.get('evidence', []))}")
+        parts.append("")
+
+    email = insights.get("follow_up_email")
+    if email:
+        parts.append("## Follow-up email\n")
+        parts.append(f"**Subject:** {email.get('subject', '')}\n")
+        parts.append(email.get("body", ""))
+        parts.append("")
+
+    return "\n".join(parts)
+
+
 def _render_field(name: str, value) -> str:
     """Formats one skill field generically by shape, not by name — a
     score ({"score","justification","evidence"}), a check
@@ -61,6 +97,10 @@ def _render_field(name: str, value) -> str:
 
 def to_markdown(call, run, agent_outputs: list[dict], *, include_transcript: bool = False, transcript=None) -> str:
     lines: list[str] = [f"# {call.title}", "", f"_Status: {run.status}_", ""]
+
+    insights_md = render_insights_markdown(run.insights)
+    if insights_md:
+        lines.append(insights_md)
 
     for ao in agent_outputs:
         if not ao["output"]:
@@ -91,6 +131,7 @@ def export_json(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
             "recorded_at": call.recorded_at.isoformat(),
         },
         "run": {"status": run.status, "edited": any(ao["edited"] for ao in agent_outputs)},
+        "insights": run.insights,
         "agent_runs": agent_outputs,
     }
 
@@ -101,5 +142,6 @@ def share_snapshot(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
         "title": call.title,
         "recorded_at": call.recorded_at.isoformat(),
         "duration_s": call.duration_s,
+        "insights": run.insights,
         "agent_runs": agent_outputs,
     }
