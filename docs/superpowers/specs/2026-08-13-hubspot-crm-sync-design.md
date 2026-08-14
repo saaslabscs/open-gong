@@ -1,6 +1,10 @@
 # HubSpot CRM Sync — Design
 
-**Status:** Approved for planning
+**Status:** Approved for planning — **§1 "Connection" superseded** by
+`2026-08-14-integrations-design.md`. Connections are now managed in the UI and
+stored in the `integrations` table; the `HUBSPOT_ACCESS_TOKEN` env var and the
+`setup_env.status()` `crm` row described below are no longer the plan. Everything
+else here (matching, what gets written, `CrmSync`, the `crm_sync` stage) stands.
 **Date:** 2026-08-13
 **Phase:** Open Gong Phase 2, first feature (P2 in the roadmap)
 
