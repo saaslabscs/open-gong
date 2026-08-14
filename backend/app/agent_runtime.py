@@ -39,6 +39,7 @@ class AgentStepState:
 class AgentRunState:
     steps: list[AgentStepState] = field(default_factory=list)
     budget: float = field(default_factory=max_cost_per_run)
+    critical: frozenset[str] = frozenset()
 
     @property
     def spent(self) -> float:
@@ -86,13 +87,22 @@ class AgentRunState:
                 s.status = "skipped"
 
     def final_status(self) -> str:
-        """shipped | partial | failed — no per-step "critical" concept:
-        skills are user-configured, so an AgentRun is failed only when
-        nothing shipped from it at all."""
+        """shipped | partial | failed.
+
+        A critical step that did not complete — failed, or skipped because an
+        earlier stop cut execution short — means nothing shipped. Agent runs
+        pass no critical set: their skills are user-configured, so they are
+        failed only when nothing shipped from them at all.
+        """
+        if any(s.name in self.critical and s.status != "ok" for s in self.steps):
+            return "failed"
         if not self.steps:
+            # An agent whose router selected no skills legitimately did nothing.
+            # The status stays "shipped"; AgentRun.routing_reasoning (Task 5)
+            # carries the why, and the UI (Task 10) says so instead of
+            # rendering an empty card.
             return "shipped"
-        shipped_any = any(s.status == "ok" for s in self.steps)
-        if not shipped_any:
+        if not any(s.status == "ok" for s in self.steps):
             return "failed"
         if any(s.status == "failed" for s in self.steps) or any(s.dropped_claims for s in self.steps):
             return "partial"
@@ -108,5 +118,8 @@ class AgentRunState:
         raise KeyError(f"unknown step {name!r}")
 
 
-def new_agent_run_state(step_names: list[str]) -> AgentRunState:
-    return AgentRunState(steps=[AgentStepState(n) for n in step_names])
+def new_agent_run_state(step_names: list[str], critical: set[str] | None = None) -> AgentRunState:
+    return AgentRunState(
+        steps=[AgentStepState(n) for n in step_names],
+        critical=frozenset(critical or ()),
+    )

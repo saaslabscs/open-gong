@@ -101,3 +101,42 @@ def test_as_dicts_matches_step_shape():
     rs.execute("skill-a", lambda: "ok")
     dicts = rs.as_dicts()
     assert dicts == [{"name": "skill-a", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None}]
+
+
+def test_failed_critical_step_is_failed_even_when_another_shipped():
+    rs = new_agent_run_state(["summarize", "compose_email"], critical={"summarize"})
+    rs.execute("compose_email", lambda: "ok")
+
+    def boom():
+        raise ValueError("no summary")
+
+    with pytest.raises(StageFailed):
+        rs.execute("summarize", boom)
+    assert rs.final_status() == "failed"
+
+
+def test_failed_noncritical_step_is_partial():
+    rs = new_agent_run_state(["summarize", "compose_email"], critical={"summarize"})
+    rs.execute("summarize", lambda: "ok")
+
+    def boom():
+        raise ValueError("no email")
+
+    with pytest.raises(StageFailed):
+        rs.execute("compose_email", boom)
+    assert rs.final_status() == "partial"
+
+
+def test_skipped_critical_step_is_failed():
+    """A critical step skipped by an earlier stop is as fatal as one that failed."""
+    rs = new_agent_run_state(["compose_email", "summarize"], critical={"summarize"})
+    rs.execute("compose_email", lambda: "ok")
+    rs.skip_remaining("compose_email")
+    assert rs.final_status() == "failed"
+
+
+def test_critical_defaults_to_empty_so_agent_runs_are_unaffected():
+    rs = new_agent_run_state(["sales-scorecard"])
+    rs.execute("sales-scorecard", lambda: "ok")
+    assert rs.critical == frozenset()
+    assert rs.final_status() == "shipped"
