@@ -144,12 +144,16 @@ def test_aggregate_budget_exceeded_skips_remaining_agents_cleanly(monkeypatch):
     both apply. Two agents each spend WITHIN their own per-agent budget
     (proving this isn't just the per-agent cap firing), but their combined
     spend crosses MAX_COST_PER_RUN before a third agent starts — that third
-    agent's AgentRun must never be created. No zombie runs, clean finalize."""
+    agent's AgentRun must never be created. No zombie runs, clean finalize.
+
+    The cap counts the guaranteed baseline's spend too (0.024 with the shared
+    fake LLM), so the budget here leaves room for the baseline plus two agents
+    at 0.03 and not a third."""
     call_id, agent_ids, skill_ids = _seed(
         ["Call Summarizer", "QA Coach", "Knowledgebase"],
         {"Call Summarizer": ["plain-summary"], "QA Coach": ["qa-rubric"], "Knowledgebase": ["kb-lookup"]},
     )
-    monkeypatch.setenv("MAX_COST_PER_RUN", "0.05")
+    monkeypatch.setenv("MAX_COST_PER_RUN", "0.08")
 
     monkeypatch.setattr(
         orchestrator_mod, "dispatch",
@@ -179,6 +183,45 @@ def test_aggregate_budget_exceeded_skips_remaining_agents_cleanly(monkeypatch):
         assert run.status == "shipped"  # finalized cleanly, not stuck "running"
         assert "budget" in run.orchestrator_reasoning.lower()
         assert "Knowledgebase" in run.orchestrator_reasoning
+
+
+def test_baseline_spend_counts_against_the_per_run_budget(monkeypatch):
+    """The guaranteed baseline is not free. Its spend (0.024 with the shared
+    fake LLM) is part of the run's total, so a run must not be able to spend
+    the baseline's budget and then the whole cap again on agents."""
+    call_id, agent_ids, skill_ids = _seed(
+        ["Call Summarizer", "QA Coach"],
+        {"Call Summarizer": ["plain-summary"], "QA Coach": ["qa-rubric"]},
+    )
+    monkeypatch.setenv("MAX_COST_PER_RUN", "0.05")
+
+    monkeypatch.setattr(
+        orchestrator_mod, "dispatch",
+        lambda lines, agents, prompt: (
+            [agent_ids["Call Summarizer"], agent_ids["QA Coach"]], "Both needed.", 0.0,
+        ),
+    )
+    monkeypatch.setattr(
+        skill_router_mod, "route_skills",
+        lambda lines, prompt, skills: ([s["id"] for s in skills], "route all", 0.0),
+    )
+    monkeypatch.setattr(
+        executor_mod, "run_skill",
+        lambda skill, lines: ({"summary_text": "A call."}, [], 0.03),
+    )
+
+    from app.pipeline import run_insights
+
+    run_insights({"call_id": call_id})
+
+    with get_session() as session:
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        agent_runs = session.scalars(select(AgentRun).where(AgentRun.call_id == call_id)).all()
+        # baseline 0.024 + first agent 0.03 = 0.054, past the 0.05 cap, so the
+        # second agent never starts. Ignoring the baseline would have let it.
+        assert len(agent_runs) == 1
+        assert "QA Coach" in run.orchestrator_reasoning
+        assert "budget" in run.orchestrator_reasoning.lower()
 
 
 # --- Orchestrator designation (Agent.is_orchestrator) ------------------------
