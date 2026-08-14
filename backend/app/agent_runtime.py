@@ -1,12 +1,12 @@
-"""Per-AgentRun retry/budget harness: the same guarantees as
-run_state.RunState (capped retries, budget cap, a clear terminal status),
-generalized to a dynamic step list built from one agent's routed skills
-instead of the fixed global STAGES list. See
+"""Retry/budget harness for a dynamic step list: capped retries, a budget cap,
+and a clear terminal status, over whatever steps the caller passes in — one
+agent's routed skills, or the pipeline's own guaranteed baseline. See
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4.
 
-Skills are user-configured, so there is no fixed "critical" skill the way
-transcribe/extract/validate are critical stages today: an AgentRun is
-`failed` only when every one of its steps failed to ship anything.
+Criticality is the caller's to declare. Agent runs pass no critical set,
+because their skills are user-configured: such a run is `failed` only when
+every one of its steps failed to ship anything. The baseline passes
+run_state.CRITICAL_STAGES, so a failed `summarize` fails the whole run.
 """
 
 from dataclasses import dataclass, field

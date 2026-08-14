@@ -1,6 +1,11 @@
-"""Shared retry/budget primitives, reused by agent_runtime.AgentRunState.
-The fixed-stage RunState this module used to define is retired — see
-docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §3."""
+"""The fixed pipeline stages, and the retry/budget primitives shared with
+agent_runtime.AgentRunState.
+
+The old RunState class is gone — agent_runtime's harness replaced it — but the
+stage list itself is back: `summarize` and `compose_email` run on every call
+before any agent dispatches, so a summary cannot be configured away. See
+docs/superpowers/specs/2026-08-14-guaranteed-summaries-and-call-log-ui-design.md
+§1."""
 
 import os
 
