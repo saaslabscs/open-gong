@@ -1,22 +1,17 @@
 "use client";
 
 import type { Insights } from "@/lib/api";
+import { Cite } from "@/lib/skillOutput";
 
-function Cite({ evidence, onJump }: { evidence: { quote: string; line: number }[]; onJump: (line: number) => void }) {
-  if (!evidence?.length) return null;
-  return (
-    <button className="cite" title={evidence[0].quote} onClick={() => onJump(evidence[0].line)}>
-      ❝ proof
-    </button>
-  );
-}
-
+// The guaranteed baseline: summary, next steps, objections and the follow-up
+// email draft. `onJump` is omitted on the public share page, where there is no
+// transcript rail to scroll — Cite then renders its quotes as a tooltip.
 export default function InsightsPanel({
   insights,
   onJump,
 }: {
   insights: Insights | null;
-  onJump: (line: number) => void;
+  onJump?: (line: number) => void;
 }) {
   if (!insights) {
     return (
@@ -36,8 +31,9 @@ export default function InsightsPanel({
   const hasContent = hasSummary || hasNextSteps || hasObjections || hasEmail;
 
   if (!hasContent) {
-    const message = dropped_claims && dropped_claims > 0
-      ? `No claims with evidence to show (${dropped_claims} claims dropped).`
+    const droppedCount = dropped_claims?.length ?? 0;
+    const message = droppedCount > 0
+      ? `No claims with evidence to show (${droppedCount} dropped for lack of proof).`
       : "No summary for this call yet.";
     return (
       <div className="card text-sm text-neutral-500">
@@ -95,7 +91,7 @@ export default function InsightsPanel({
         </section>
       )}
 
-      {hasEmail && <FollowUpEmail email={follow_up_email} />}
+      {follow_up_email && <FollowUpEmail email={follow_up_email} />}
     </div>
   );
 }

@@ -16,6 +16,47 @@ function formatDuration(s: number | null) {
   return s == null ? "" : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+// The three sortable columns, each reduced to one comparable number. A call
+// with no duration sorts below every timed one rather than as zero seconds.
+type SortKey = "date" | "length" | "agents";
+const SORT_VALUE: Record<SortKey, (c: CallSummary) => number> = {
+  date: (c) => new Date(c.recorded_at).getTime(),
+  length: (c) => c.duration_s ?? -1,
+  agents: (c) => c.agent_count,
+};
+type Sort = { key: SortKey; dir: "asc" | "desc" };
+
+function SortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className = "",
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: Sort;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      className={`py-2 font-semibold ${className}`}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 ${active ? "text-neutral-700" : "hover:text-neutral-600"}`}
+      >
+        {label}
+        {active && <span className="text-[9px]">{sort.dir === "asc" ? "▲" : "▼"}</span>}
+      </button>
+    </th>
+  );
+}
+
 export default function Home() {
   const [calls, setCalls] = useState<CallSummary[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
@@ -32,25 +73,44 @@ export default function Home() {
   const [q, setQ] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useState("all");
   const [days, setDays] = useState(30);
+  // Newest first, matching the order the API returns.
+  const [sort, setSort] = useState<Sort>({ key: "date", dir: "desc" });
 
   // Lazy initializer runs once, outside the render-purity check that flags
   // calling Date.now() directly in the render body (react-hooks/purity).
   // Day-granularity filtering doesn't need this to stay live-ticking.
   const [now] = useState(() => Date.now());
 
+  // Only the agents that actually appear in the fetched calls — a filter that
+  // offers a value matching nothing would be a dead end.
+  const agentOptions = useMemo(
+    () => Array.from(new Set(calls.flatMap((c) => c.agents ?? []))).sort(),
+    [calls],
+  );
+
   const visible = useMemo(() => {
-    return calls.filter((c) => {
-      if (q && !c.title.toLowerCase().includes(q.toLowerCase())) return false;
-      if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
-      if (statusFilter !== "all" && c.run_status !== statusFilter) return false;
-      if (days > 0) {
-        const age = (now - new Date(c.recorded_at).getTime()) / 86400000;
-        if (age > days) return false;
-      }
-      return true;
-    });
-  }, [calls, q, sourceFilter, statusFilter, days, now]);
+    const value = SORT_VALUE[sort.key];
+    return calls
+      .filter((c) => {
+        if (q && !c.title.toLowerCase().includes(q.toLowerCase())) return false;
+        if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
+        if (statusFilter !== "all" && c.run_status !== statusFilter) return false;
+        if (agentFilter !== "all" && !(c.agents ?? []).includes(agentFilter)) return false;
+        if (days > 0) {
+          const age = (now - new Date(c.recorded_at).getTime()) / 86400000;
+          if (age > days) return false;
+        }
+        return true;
+      })
+      // sorts the array filter() just allocated, never `calls` itself
+      .sort((a, b) => (sort.dir === "asc" ? value(a) - value(b) : value(b) - value(a)));
+  }, [calls, q, sourceFilter, statusFilter, agentFilter, days, now, sort]);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" }));
+  }
 
   const refresh = useCallback(() => listCalls().then(setCalls).catch(() => {}), []);
 
@@ -117,6 +177,17 @@ export default function Home() {
             <option value="partial">Needs review</option>
             <option value="failed">Couldn’t finish</option>
             <option value="running">Analyzing</option>
+          </select>
+          <select
+            value={agentFilter}
+            onChange={(e) => setAgentFilter(e.target.value)}
+            className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+            aria-label="Filter by agent"
+          >
+            <option value="all">Any agent</option>
+            {agentOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
           </select>
           <button onClick={() => setShowAdd((v) => !v)} className="btn btn-primary">
             {showAdd ? "Close" : "Add call"}
@@ -190,12 +261,12 @@ export default function Home() {
         <table className="mt-6 w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left text-xs uppercase tracking-wide text-neutral-400">
-              <th className="py-2 font-semibold">Date</th>
+              <SortHeader label="Date" sortKey="date" sort={sort} onSort={toggleSort} />
               <th className="py-2 font-semibold">Call</th>
               <th className="py-2 font-semibold">Source</th>
-              <th className="py-2 font-semibold">Length</th>
+              <SortHeader label="Length" sortKey="length" sort={sort} onSort={toggleSort} />
               <th className="py-2 font-semibold">Status</th>
-              <th className="py-2 text-right font-semibold">Agents</th>
+              <SortHeader label="Agents" sortKey="agents" sort={sort} onSort={toggleSort} className="text-right" />
             </tr>
           </thead>
           <tbody>

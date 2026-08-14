@@ -4,6 +4,28 @@ import type { Evidence } from "./api";
 // each by both the call view and the share page.
 export type ClaimItem = { text: string; evidence: Evidence[] };
 
+/** The receipt chip. The product's whole promise is that a claim can be
+ * checked, so this shows EVERY quote backing it and admits how many there
+ * are — three divergent copies of this once meant the default Summary tab
+ * showed one quote of three and said nothing about the rest.
+ *
+ * With `onJump` it is a button that scrolls the transcript rail to the first
+ * cited line; without one (the public share page, which carries no
+ * transcript) the quotes are a static tooltip. */
+export function Cite({ evidence, onJump }: { evidence: Evidence[]; onJump?: (line: number) => void }) {
+  if (!evidence?.length) return null;
+  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
+  const label = `❝ proof${evidence.length > 1 ? ` ·${evidence.length}` : ""}`;
+  if (!onJump) {
+    return <span className="cite cursor-help" title={title}>{label}</span>;
+  }
+  return (
+    <button type="button" className="cite" title={title} onClick={() => onJump(evidence[0].line)}>
+      {label}
+    </button>
+  );
+}
+
 /** Formats one skill-output field generically by shape, not by name — the
  * frontend mirror of `backend/app/render.py::_render_field`. A score is
  * `{score, justification, evidence}`, a check is `{value, evidence}`, and

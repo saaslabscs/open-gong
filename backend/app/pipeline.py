@@ -3,10 +3,14 @@
 `process_call`: submit audio to PyAI (mock by default); transcript returns via
 the signed webhook, which enqueues `run_insights`.
 
-`run_insights`: orchestrator dispatch -> per-agent AgentRun -> skill router ->
-skill execution. Every AgentRun finishes shipped | partial | failed, and the
-call's Run status aggregates across all its AgentRuns. See
-docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §4, §5.
+`run_insights`: prettify the transcript, then the guaranteed baseline
+(`summarize` -> `compose_email`, stored on `Run.insights`), then orchestrator
+dispatch -> per-agent AgentRun -> skill router -> skill execution. The
+baseline runs first and unconditionally — no LLM decision sits between a call
+and its summary. Every AgentRun finishes shipped | partial | failed, and the
+call's Run status aggregates the baseline and all its AgentRuns. See
+docs/superpowers/specs/2026-08-14-guaranteed-summaries-and-call-log-ui-design.md
+§1 and 2026-08-13-agent-skill-architecture-design.md §4, §5.
 """
 
 import re
@@ -197,17 +201,54 @@ def _derive_title(current: str, baseline: dict) -> str | None:
     claims = baseline.get("summary") or []
     if not claims:
         return None
-    text = claims[0]["text"].strip()
+    # Runs outside the try that guarantees a terminal Run status, so it must not
+    # raise on a malformed claim: a raise here strands the Run "running" AND
+    # un-retryable (/retry 409s on anything but failed/partial).
+    text = (claims[0].get("text") or "").strip()
     return text[:70].rstrip(" .,;:") if text else None
 
 
-def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict, dropped: list[dict]) -> None:
+def _dropped_count(insights: dict) -> int:
+    """How many claims a stored summary dropped. `dropped_claims` holds the
+    list of {where, reason} — pre-cutover rows store the same list."""
+    drops = insights.get("dropped_claims")
+    return len(drops) if isinstance(drops, list) else int(drops or 0)
+
+
+def _reuse_completed_stage(
+    rs: AgentRunState, name: str, prior_stages: dict[str, dict], *, dropped_claims: int = 0
+) -> bool:
+    """True if a prior attempt already completed this stage — don't run it again.
+
+    `POST /api/calls/{id}/retry` accepts `partial` and resets only the stages
+    that failed or were skipped, so a retry commonly arrives with `summarize`
+    already `ok`. Re-running it would pay for a second summary and, if that
+    attempt fails, replace insights the user already has with nothing. The
+    prior attempt's attempts/cost/dropped count are carried onto the step so
+    the merged stage row and the run's cost total stay truthful.
+    """
+    prior = prior_stages.get(name)
+    if not prior or prior.get("status") != "ok":
+        return False
+    step = rs._get(name)
+    step.status = "ok"
+    step.attempts = prior.get("attempts") or 1
+    step.cost_usd = prior.get("cost_usd") or 0.0
+    step.dropped_claims = dropped_claims
+    return True
+
+
+def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict) -> None:
     """Write the baseline stages and insights onto the Run.
 
     Unions into Run.stages by name: updates entries that exist (so `transcribe`,
     already ok, survives) and appends the ones that don't. Appending matters —
     a Run built before this change, or by a test, carries only `transcribe`, and
     an update-only merge would silently drop the baseline stages.
+
+    An empty `baseline` never overwrites `Run.insights`: a retry whose
+    `summarize` fails must leave the summary the user already had in place,
+    the same way `edited_output` is carried across a retry.
     """
     with get_session() as session:
         run = session.get(Run, run_id)
@@ -215,7 +256,8 @@ def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict, dropped: l
         merged = [dict(s, **by_name.pop(s["name"], {})) for s in run.stages]
         merged.extend(by_name[n] for n in STAGES if n in by_name)
         run.stages = merged
-        run.insights = baseline or None
+        if baseline:
+            run.insights = baseline
         run.cost_usd = round((run.cost_usd or 0.0) + rs.spent, 4)
         new_title = _derive_title(run.call.title, baseline)
         if new_title:
@@ -271,10 +313,36 @@ def run_insights(payload: dict) -> None:
         session.commit()
 
         lines = call.transcript.lines
+        # What a prior attempt already achieved. A retry re-enters here with
+        # `summarize` still `ok` whenever the run was only `partial`.
+        prior_stages = {s["name"]: dict(s) for s in run.stages}
+        prior_insights: dict = dict(run.insights) if run.insights else {}
+
+    # Prettify raw STT for readability (non-fatal, skips already-clean text).
+    # Runs before the baseline so the cleaned text is what quotes cite and the
+    # UI shows: `summarize` verifies every quote against these lines and the
+    # transcript rail renders them, so prettifying afterwards would leave each
+    # stored quote proven against text the reader never sees.
+    try:
+        pretty, fmt_cost = prettify_transcript(lines)
+        if pretty is not lines:
+            update_transcript_lines(call_id, pretty)
+            lines = pretty
+    except Exception:  # noqa: BLE001 — readability is never worth failing a run over
+        fmt_cost = 0.0
+    if fmt_cost:
+        # Booked here, not in _dispatch_and_run: a failing `summarize` returns
+        # before dispatch and this cost was still spent.
+        with get_session() as session:
+            run = session.get(Run, run_id)
+            run.cost_usd = round((run.cost_usd or 0.0) + fmt_cost, 4)
+            session.commit()
 
     # The guaranteed baseline. Runs before dispatch so agents never gate it.
-    rs = new_agent_run_state(["summarize", "compose_email"], critical=CRITICAL_STAGES)
-    baseline: dict = {}
+    rs = new_agent_run_state(STAGES[1:], critical=CRITICAL_STAGES)
+    # Start from what is already stored so a retry adds to the user's notes
+    # instead of replacing them.
+    baseline: dict = dict(prior_insights)
     dropped: list[dict] = []
 
     def do_summarize():
@@ -285,37 +353,54 @@ def run_insights(payload: dict) -> None:
         rs._get("summarize").dropped_claims = len(drops)
         return cleaned
 
-    try:
-        baseline = rs.execute("summarize", do_summarize)
-    except (StageFailed, BudgetExceeded):
-        rs.skip_remaining("summarize")
-        _persist_baseline(run_id, rs, baseline, dropped)
-        # A failed critical stage stops the chain here — agents never dispatch
-        # over a call with no summary. Still must land in a terminal state, or
-        # the Run is stuck "running" forever with no retry signal.
-        with get_session() as session:
-            run = session.get(Run, run_id)
-            if run is not None:
-                run.status = "failed"
-                run.finished_at = datetime.now(timezone.utc)
-                session.commit()
-        return
+    # Reuse a stage only when the artifact it produces is actually stored: an
+    # `ok` stage with nothing behind it (an older row, a hand-edited database)
+    # must regenerate rather than ship an empty summary.
+    reuse_summary = bool(prior_insights) and _reuse_completed_stage(
+        rs, "summarize", prior_stages, dropped_claims=_dropped_count(prior_insights)
+    )
+    if not reuse_summary:
+        try:
+            baseline.update(rs.execute("summarize", do_summarize))
+        except (StageFailed, BudgetExceeded):
+            rs.skip_remaining("summarize")
+            _persist_baseline(run_id, rs, baseline)
+            # A failed critical stage stops the chain here — agents never dispatch
+            # over a call with no summary. Still must land in a terminal state, or
+            # the Run is stuck "running" forever with no retry signal.
+            with get_session() as session:
+                run = session.get(Run, run_id)
+                if run is not None:
+                    run.status = "failed"
+                    run.finished_at = datetime.now(timezone.utc)
+                    session.commit()
+            return
+        # Only overwrite when this attempt actually produced the summary; a
+        # reused stage keeps the count its own attempt earned.
+        baseline["dropped_claims"] = dropped
 
     def do_email():
         email, cost = insights_mod.compose_email(lines, baseline)
         rs.charge("compose_email", cost)
         return email
 
-    try:
-        baseline["follow_up_email"] = rs.execute("compose_email", do_email)
-    except (StageFailed, BudgetExceeded):
-        pass  # non-critical: the summary still ships
+    # A fresh summary needs a fresh email: one drafted from the previous summary
+    # could promise things the new notes no longer contain.
+    reuse_email = (
+        reuse_summary
+        and bool(baseline.get("follow_up_email"))
+        and _reuse_completed_stage(rs, "compose_email", prior_stages)
+    )
+    if not reuse_email:
+        try:
+            baseline["follow_up_email"] = rs.execute("compose_email", do_email)
+        except (StageFailed, BudgetExceeded):
+            pass  # non-critical: the summary still ships
 
-    baseline["dropped_claims"] = len(dropped)
-    _persist_baseline(run_id, rs, baseline, dropped)
+    _persist_baseline(run_id, rs, baseline)
 
     try:
-        _dispatch_and_run(call_id, run_id, preserved_edits, rs)
+        _dispatch_and_run(call_id, run_id, preserved_edits, rs, lines)
     except Exception as e:  # noqa: BLE001 — reason recorded on the Run, not swallowed
         # An unexpected failure anywhere in dispatch/routing/execution (e.g.
         # malformed LLM JSON the orchestrator itself doesn't guard against)
@@ -336,20 +421,14 @@ def run_insights(payload: dict) -> None:
 
 
 def _dispatch_and_run(
-    call_id: str, run_id: str, preserved_edits: dict[str, dict] | None, rs: AgentRunState
+    call_id: str, run_id: str, preserved_edits: dict[str, dict] | None, rs: AgentRunState,
+    lines: list[dict],
 ) -> None:
+    """`lines` is the prettified transcript the baseline already cited, passed
+    in rather than re-read so agents and the baseline see the same text."""
     with get_session() as session:
         call = session.get(Call, call_id)
         run = session.get(Run, run_id)
-        lines = call.transcript.lines
-
-        try:
-            pretty, fmt_cost = prettify_transcript(lines)
-            if pretty is not lines:
-                update_transcript_lines(call_id, pretty)
-                lines = pretty
-        except Exception:
-            fmt_cost = 0.0
 
         entry_agent_id = resolve_entry_rule(session, call)
         enabled_agents = session.scalars(select(Agent).where(Agent.enabled.is_(True))).all()
@@ -379,13 +458,18 @@ def _dispatch_and_run(
             )
 
         run.orchestrator_reasoning = reasoning
-        # Additive, not a reset: the guaranteed baseline (summarize/compose_email)
-        # already persisted its own cost onto this Run before dispatch started.
-        run.cost_usd = round((run.cost_usd or 0.0) + fmt_cost + dispatch_cost, 4)
+        # Additive, not a reset: the prettify pass and the guaranteed baseline
+        # (summarize/compose_email) already persisted their cost onto this Run
+        # before dispatch started.
+        run.cost_usd = round((run.cost_usd or 0.0) + dispatch_cost, 4)
         session.commit()
 
         agents_to_run = [(a, agent_skills[a.id]) for a in selected_agents]
-        spent_so_far = round(fmt_cost + dispatch_cost, 4)
+        # The per-run cap must count everything this run has already spent —
+        # prettify, the baseline, and dispatch — which is exactly what the row
+        # now holds. Counting only dispatch let a run spend the baseline's full
+        # budget and then the whole cap again on agents.
+        spent_so_far = run.cost_usd
         budget = max_cost_per_run()
 
     budget_note = None

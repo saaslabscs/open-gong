@@ -29,3 +29,24 @@ class Base(DeclarativeBase):
 
 def get_session() -> Session:
     return SessionLocal()
+
+
+# (table, column, type) for every column added after that table already existed
+# in a shipped database. Append here whenever a model gains a column.
+_ADDED_COLUMNS = [("runs", "insights", "JSON"), ("agent_runs", "routing_reasoning", "TEXT")]
+
+
+def ensure_columns(engine) -> None:
+    """No migration tooling here: add columns create_all() cannot add to an existing table.
+
+    Columns introduced after a database was first created are invisible to
+    create_all, so an upgrade would otherwise fail with "no such column" on
+    every read path. Idempotent; skips non-SQLite backends.
+    """
+    if not engine.url.get_backend_name().startswith("sqlite"):
+        return
+    with engine.begin() as con:
+        for table, col, type_ in _ADDED_COLUMNS:
+            existing = {r[1] for r in con.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if existing and col not in existing:
+                con.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {type_}")

@@ -23,7 +23,7 @@ from .api.review import router as review_router
 from .api.share import router as share_router
 from .api.skills import router as skills_router
 from .api.webhooks import router as webhooks_router
-from .db import Base, engine, get_session
+from .db import Base, engine, ensure_columns, get_session
 from .jobs import worker_loop
 from .models import Agent, AgentRun, Call, Run
 
@@ -31,6 +31,10 @@ from .models import Agent, AgentRun, Call, Run
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
+    # create_all only creates missing *tables* — a column added to a model after
+    # the database was first created needs an explicit ALTER, or every read of
+    # it dies with "no such column" on an upgraded install.
+    ensure_columns(engine)
     with get_session() as session:
         empty = session.scalars(select(Call).limit(1)).first() is None
     if empty:
@@ -101,15 +105,20 @@ def _latest_run(session, call_id: str) -> Run | None:
 @app.get("/api/calls")
 def list_calls() -> list[dict]:
     with get_session() as session:
-        calls = session.scalars(select(Call).order_by(Call.created_at)).all()
+        # Newest first: a dense call log read oldest-first put the call you just
+        # ingested at the bottom.
+        calls = session.scalars(select(Call).order_by(Call.created_at.desc())).all()
+        # One lookup for the whole page — the log's agent filter needs a name per
+        # row, and there are far fewer agents than calls.
+        agent_names = {a.id: a.name for a in session.scalars(select(Agent)).all()}
         out = []
         for c in calls:
             run = _latest_run(session, c.id)
-            agent_count = 0
-            if run is not None:
-                agent_count = len(
-                    session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all()
-                )
+            agent_runs = (
+                session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all()
+                if run is not None
+                else []
+            )
             out.append(
                 {
                     "id": c.id,
@@ -118,7 +127,10 @@ def list_calls() -> list[dict]:
                     "duration_s": c.duration_s,
                     "recorded_at": c.recorded_at.isoformat(),
                     "run_status": run.status if run else "pending",
-                    "agent_count": agent_count,
+                    "agent_count": len(agent_runs),
+                    "agents": sorted(
+                        {agent_names.get(ar.agent_id, "Unknown agent") for ar in agent_runs}
+                    ),
                 }
             )
         return out

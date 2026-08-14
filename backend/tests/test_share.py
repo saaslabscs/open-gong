@@ -152,6 +152,36 @@ def test_share_link_freezes_snapshot_and_excludes_transcript():
             assert "compliance-check" not in ao["output"]
 
 
+LEGACY_INSIGHTS = {
+    "intent": {"value": "support", "confidence": 0.94, "evidence": []},
+    "summary": [{"text": "Bob was double-charged.", "evidence": [{"quote": "charged twice", "line": 2}]}],
+    "objections": [],
+    "next_steps": [],
+    "follow_up_email": None,
+    "dropped_claims": [{"where": "summary[1]", "reason": "quote not found in line 2"}],
+    "scorecard": {"pack": "support-default", "fields": [{"name": "issue_identified", "value": True}]},
+}
+
+
+def test_retired_insight_sections_never_leave_the_building():
+    """The 9 pre-cutover rows still hold `intent` and `scorecard`. Those stay
+    retired — passing Run.insights through verbatim would republish them from
+    the public share endpoint and in export.json."""
+    with TestClient(app) as c:
+        call_id, _ = _seed(insights=LEGACY_INSIGHTS)
+        token = c.post(f"/api/calls/{call_id}/share").json()["token"]
+        snap = c.get(f"/api/share/{token}").json()["snapshot"]
+        exported = c.get(f"/api/calls/{call_id}/export.json").json()
+
+    for ins in (snap["insights"], exported["insights"]):
+        assert "scorecard" not in ins
+        assert "intent" not in ins
+        assert ins["summary"][0]["text"] == "Bob was double-charged."  # the kept sections survive
+        assert ins["follow_up_email"] is None
+        # dropped_claims keeps the stored list shape end to end
+        assert ins["dropped_claims"] == [{"where": "summary[1]", "reason": "quote not found in line 2"}]
+
+
 def test_share_revoke_404s():
     with TestClient(app) as c:
         call_id, _ = _seed()

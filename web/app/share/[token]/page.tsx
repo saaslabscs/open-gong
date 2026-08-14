@@ -1,12 +1,14 @@
-import { getShare, type Evidence, type ShareSnapshot, type SharedAgentRun } from "@/lib/api";
-import { renderScalarField, type ClaimItem } from "@/lib/skillOutput";
+import { getShare, type ShareSnapshot, type SharedAgentRun } from "@/lib/api";
+import { Cite, renderScalarField, type ClaimItem } from "@/lib/skillOutput";
+import InsightsPanel from "@/components/Insights";
 import { notFound } from "next/navigation";
 
-// The snapshot is a frozen list of per-agent, per-skill outputs (see
-// backend/app/render.py::share_snapshot) — the same shape the call detail view
-// renders, minus ids/steps/cost. Fields are dispatched by shape, not by name,
-// via the shared `renderScalarField`. Evidence is shown as a static tooltip:
-// there is no transcript on a public share page to jump to.
+// The snapshot is the frozen guaranteed summary plus a list of per-agent,
+// per-skill outputs (see backend/app/render.py::share_snapshot) — the same
+// shapes the call detail view renders, minus ids/steps/cost. Fields are
+// dispatched by shape, not by name, via the shared `renderScalarField`.
+// `Cite` is rendered without `onJump`, so evidence is a static tooltip: there
+// is no transcript on a public share page to scroll to.
 
 export default async function SharePage(props: PageProps<"/share/[token]">) {
   const { token } = await props.params;
@@ -30,10 +32,18 @@ export default async function SharePage(props: PageProps<"/share/[token]">) {
         </p>
       </div>
 
-      {agentRuns.length === 0 ? (
+      {/* The summary is the headline: a shared call commonly has one and no
+          agent runs at all, which used to render "No notes were shared". */}
+      {snap.insights && (
+        <div className="mb-8">
+          <InsightsPanel insights={snap.insights} />
+        </div>
+      )}
+
+      {agentRuns.map((ar, i) => <AgentRunBlock key={`${ar.agent_name}-${i}`} agentRun={ar} />)}
+
+      {agentRuns.length === 0 && !snap.insights && (
         <p className="text-sm text-neutral-500">No notes were shared for this call.</p>
-      ) : (
-        agentRuns.map((ar, i) => <AgentRunBlock key={`${ar.agent_name}-${i}`} agentRun={ar} />)
       )}
 
       <p className="mt-10 text-center text-xs text-neutral-400">
@@ -60,16 +70,6 @@ function AgentRunBlock({ agentRun }: { agentRun: SharedAgentRun }) {
         ))}
       </div>
     </section>
-  );
-}
-
-function Cite({ evidence }: { evidence: Evidence[] }) {
-  if (!evidence?.length) return null;
-  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
-  return (
-    <span className="cite cursor-help" title={title}>
-      ❝ proof{evidence.length > 1 ? ` ·${evidence.length}` : ""}
-    </span>
   );
 }
 

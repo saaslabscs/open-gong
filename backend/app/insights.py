@@ -1,8 +1,13 @@
-"""Transcript prettify: reformat raw STT into readable text before any
-skill runs. The old intent → pack → extraction → scoring → email chain this
-module used to define is retired — that work is now done generically by
-seeded skills executed through skills/executor.py. See
-docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §3.
+"""The guaranteed baseline every call gets, plus the prettify pass that runs
+before it.
+
+`summarize` and `compose_email` are the fixed pipeline stages behind
+`Run.insights`: built-in schemas, not pack-driven, not agent-dispatched, not
+configurable. Only the old intent → pack selection → scoring part of the
+pre-cutover chain stays retired; scorecards and compliance are now ordinary
+seeded skills run through skills/executor.py. See
+docs/superpowers/specs/2026-08-14-guaranteed-summaries-and-call-log-ui-design.md
+§1 and 2026-08-13-agent-skill-architecture-design.md §3.
 """
 
 import json

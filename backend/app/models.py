@@ -56,8 +56,9 @@ class Run(Base):
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"))
     # pending | running | shipped | partial | failed — aggregate across this call's AgentRuns
     status: Mapped[str] = mapped_column(String, default="pending")
-    # [{"name","status","attempts","cost_usd","error"}] — transcribe-stage bookkeeping only;
-    # per-skill steps live on AgentRun.steps now
+    # [{"name","status","attempts","cost_usd","error"}] — the fixed pipeline stages
+    # (run_state.STAGES: transcribe, summarize, compose_email). Per-skill steps live
+    # on AgentRun.steps.
     stages: Mapped[list] = mapped_column(JSON, default=list)
     # {summary, objections, next_steps, follow_up_email, dropped_claims} — the guaranteed
     # baseline's output, written before agent dispatch. Independent of AgentRun.output.

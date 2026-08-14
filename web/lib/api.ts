@@ -6,12 +6,15 @@ export type Evidence = { quote: string; line: number };
 export type Claim = { text: string; evidence: Evidence[] };
 export type Objection = { label: string; detail: string; status?: string; evidence: Evidence[] };
 export type NextStep = { text: string; owner?: string; evidence: Evidence[] };
+// One claim the evidence gate removed: where it was and why it failed. Stored
+// as this list by both the pre-cutover rows and the current pipeline.
+export type DroppedClaim = { where: string; reason: string };
 export type Insights = {
   summary?: Claim[];
   objections?: Objection[];
   next_steps?: NextStep[];
-  follow_up_email?: { subject: string; body: string };
-  dropped_claims?: number;
+  follow_up_email?: { subject: string; body: string } | null;
+  dropped_claims?: DroppedClaim[];
 };
 export type RunStatus = "shipped" | "partial" | "failed" | "running" | "pending";
 
@@ -23,6 +26,9 @@ export type CallSummary = {
   recorded_at: string;
   run_status: RunStatus;
   agent_count: number;
+  // Distinct names of the agents that ran on this call — what the log's agent
+  // filter offers and matches on.
+  agents: string[];
 };
 
 export type Stage = {
@@ -125,6 +131,9 @@ export type ShareSnapshot = {
   title: string;
   recorded_at: string;
   duration_s: number | null;
+  // The guaranteed baseline, frozen at share time and filtered to the public
+  // sections by `render._public_insights`. Null for a call that never got one.
+  insights: Insights | null;
   agent_runs: SharedAgentRun[];
 };
 

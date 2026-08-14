@@ -11,11 +11,10 @@ import {
   exportMarkdownUrl,
   exportJsonUrl,
   type CallDetail,
-  type Evidence,
   type AgentRunSummary,
 } from "@/lib/api";
 import { humanizeStatus, tonePill, stageLabels } from "@/lib/status";
-import { renderScalarField, type ClaimItem } from "@/lib/skillOutput";
+import { Cite, renderScalarField, type ClaimItem } from "@/lib/skillOutput";
 import InsightsPanel from "./Insights";
 
 function jumpTo(line: number) {
@@ -25,16 +24,6 @@ function jumpTo(line: number) {
   el.classList.remove("flash");
   void el.offsetWidth; // restart the animation
   el.classList.add("flash");
-}
-
-function Cite({ evidence }: { evidence: Evidence[] }) {
-  if (!evidence?.length) return null;
-  const title = evidence.map((e) => `L${e.line}: "${e.quote}"`).join("\n");
-  return (
-    <button className="cite" title={title} onClick={() => jumpTo(evidence[0].line)}>
-      ❝ proof{evidence.length > 1 ? ` ·${evidence.length}` : ""}
-    </button>
-  );
 }
 
 function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<string, unknown> }) {
@@ -47,7 +36,7 @@ function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<
             const items = value as ClaimItem[];
             if (items.length === 0) return <li key={name} className="text-neutral-400">{name.replaceAll("_", " ")}: none</li>;
             return items.map((item, i) => (
-              <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} /></li>
+              <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} onJump={jumpTo} /></li>
             ));
           }
           const rendered = renderScalarField(value);
@@ -55,7 +44,7 @@ function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<
             <li key={name} className="flex items-center gap-2">
               <span className="capitalize text-neutral-700">{name.replaceAll("_", " ")}:</span>
               <span className="font-medium">{rendered.text}</span>
-              <Cite evidence={rendered.evidence} />
+              <Cite evidence={rendered.evidence} onJump={jumpTo} />
             </li>
           );
         })}
@@ -201,6 +190,25 @@ export default function CallView({ id }: { id: string }) {
     );
   }
 
+  // Terminal, and the guaranteed summary itself failed. Nothing downstream
+  // ran (agents dispatch only after a successful summarize), so without this
+  // branch the user landed in the no-agents case below and was told the agents
+  // produced nothing — blaming agents for a summary failure, with the reason
+  // shown nowhere.
+  const summarizeStage = run.stages.find((s) => s.name === "summarize");
+  if (!insights && summarizeStage?.status === "failed") {
+    return (
+      <Shell>
+        <h1 className="text-xl font-semibold tracking-tight">{call.title}</h1>
+        <p className="mt-6 text-sm text-neutral-600">
+          Couldn&apos;t write the notes for this call
+          {summarizeStage.error ? `: ${summarizeStage.error}` : "."}
+        </p>
+        <button onClick={doRetry} disabled={busy} className="btn btn-warn mt-4">Retry</button>
+      </Shell>
+    );
+  }
+
   // Terminal, but the orchestrator picked no agents *and* there are no
   // guaranteed insights either — genuinely nothing to show. Say so, and show
   // why. If insights exist (the summarize/compose_email stages run
@@ -294,10 +302,15 @@ export default function CallView({ id }: { id: string }) {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-7">
-          <div className="flex gap-1 border-b border-neutral-200">
+          <div role="tablist" aria-label="Call notes" className="flex gap-1 border-b border-neutral-200">
             {([["summary", "Summary"], ["agents", `Agent runs`]] as const).map(([key, label]) => (
               <button
                 key={key}
+                type="button"
+                role="tab"
+                id={`tab-${key}`}
+                aria-selected={tab === key}
+                aria-controls={`tabpanel-${key}`}
                 onClick={() => setTab(key)}
                 className={`-mb-px border-b-2 px-3 py-2 text-sm ${
                   tab === key
@@ -316,9 +329,11 @@ export default function CallView({ id }: { id: string }) {
           </div>
 
           {tab === "summary" ? (
-            <InsightsPanel insights={insights} onJump={jumpTo} />
+            <div role="tabpanel" id="tabpanel-summary" aria-labelledby="tab-summary">
+              <InsightsPanel insights={insights} onJump={jumpTo} />
+            </div>
           ) : (
-            <>
+            <div role="tabpanel" id="tabpanel-agents" aria-labelledby="tab-agents" className="space-y-6">
               {agent_runs.map((ar) => (
                 <AgentRunCard key={ar.id} callId={id} agentRun={ar} onChanged={load} />
               ))}
@@ -328,7 +343,7 @@ export default function CallView({ id }: { id: string }) {
                   {run.orchestrator_reasoning && ` ${run.orchestrator_reasoning}`}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           <ProcessingDetails run={run} />
