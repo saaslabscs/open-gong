@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Atlas Freight — Voice Agent Quote</title>
+<style>
+  @page { size: Letter; margin: 0.6in; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 56px; background: #fff; color: #171717;
+    font-family: -apple-system, "Inter", "Helvetica Neue", Arial, sans-serif;
+    max-width: 720px;
+  }
+  .brand { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 36px; }
+  .brand .name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand .tag { font-size: 11px; color: #a3a3a3; text-transform: uppercase; letter-spacing: 0.08em; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: #737373; font-size: 14px; margin-bottom: 32px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; font-size: 13px; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #e5e5e5; }
+  .meta div span { color: #a3a3a3; display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #a3a3a3; font-weight: 600; padding: 0 0 10px; border-bottom: 1px solid #171717; }
+  th.num, td.num { text-align: right; }
+  td { padding: 16px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; vertical-align: top; }
+  td.item-name { font-weight: 600; }
+  td.item-detail { color: #737373; font-size: 12.5px; margin-top: 2px; display: block; font-weight: 400; }
+  tfoot td { border-bottom: none; padding-top: 20px; }
+  .total-row td { padding-top: 14px; font-size: 17px; font-weight: 700; border-top: 2px solid #171717; }
+  .proof { margin-top: 28px; padding: 16px 18px; background: #fafafa; border-radius: 8px; border: 1px solid #eee; }
+  .proof .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #a3a3a3; margin-bottom: 8px; font-weight: 600; }
+  .proof blockquote { margin: 0 0 8px; font-size: 12.5px; color: #525252; font-style: italic; padding-left: 12px; border-left: 2px solid #d4d4d4; }
+  .proof blockquote:last-child { margin-bottom: 0; }
+  .proof cite { font-style: normal; color: #a3a3a3; }
+  footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 11.5px; color: #a3a3a3; display: flex; justify-content: space-between; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+
+  <div class="brand">
+    <div class="name">Open Gong</div>
+    <div class="tag">Voice Agent Quote</div>
+  </div>
+
+  <h1>Atlas Freight — Voice Agent &amp; License Pricing</h1>
+  <div class="sub">Prepared from the discovery call with Owen · August 14, 2026</div>
+
+  <div class="meta">
+    <div><span>Prepared for</span>Owen · Atlas Freight</div>
+    <div><span>Prepared by</span>Meera · Open Gong</div>
+    <div><span>Usage basis</span>10,000 minutes / month</div>
+    <div><span>Seats</span>10 licenses</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Line item</th><th class="num">Rate</th><th class="num">Qty</th><th class="num">Amount</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="item-name">Voice agent usage<span class="item-detail">AI voice agent, per-minute billing</span></td>
+        <td class="num">$0.45 / min</td>
+        <td class="num">10,000 min</td>
+        <td class="num">$4,500.00</td>
+      </tr>
+      <tr>
+        <td class="item-name">Platform licenses<span class="item-detail">Seats for the ops &amp; QA team</span></td>
+        <td class="num">$69.00 / user</td>
+        <td class="num">10 users</td>
+        <td class="num">$690.00</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3">Total, monthly</td>
+        <td class="num">$5,190.00</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="proof">
+    <div class="label">From the call</div>
+    <blockquote>"We're routing about ten thousand minutes a month through our support line right now." <cite>— Owen</cite></blockquote>
+    <blockquote>"For that volume, our voice agent is priced at forty-five cents per minute." <cite>— Meera</cite></blockquote>
+    <blockquote>"Licenses are sixty-nine dollars per user per month." <cite>— Meera</cite> · "We'd start with ten licenses for the ops and QA team." <cite>— Owen</cite></blockquote>
+  </div>
+
+  <footer>
+    <span>Open Gong — every claim has a receipt</span>
+    <span>Valid for 30 days</span>
+  </footer>
+
+</body>
+</html>

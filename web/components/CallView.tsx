@@ -39,6 +39,19 @@ function SkillOutput({ skillName, fields }: { skillName: string; fields: Record<
               <li key={`${name}-${i}`}>{item.text} <Cite evidence={item.evidence} onJump={jumpTo} /></li>
             ));
           }
+          // A skill can hand back a document instead of a claim (a quote deck,
+          // a generated PDF) — a bare "/decks/…" string would otherwise print
+          // as inert text with nothing to click.
+          if (typeof value === "string" && /^(https?:\/\/|\/)/.test(value)) {
+            return (
+              <li key={name} className="flex items-center gap-2">
+                <span className="capitalize text-neutral-700">{name.replaceAll("_", " ")}:</span>
+                <a href={value} target="_blank" rel="noopener noreferrer" className="btn text-xs">
+                  Open / download
+                </a>
+              </li>
+            );
+          }
           const rendered = renderScalarField(value);
           return (
             <li key={name} className="flex items-center gap-2">
