@@ -48,11 +48,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Open Gong", version="0.1.0", lifespan=lifespan)
 
+# The web UI is reachable by more names than "localhost" — 127.0.0.1, the mDNS
+# hostname, a LAN IP when testing from a phone. Allowing only one of them makes
+# every ingest POST fail with an opaque "Failed to fetch". Set OPEN_GONG_CORS_ORIGINS
+# (comma-separated) to pin an exact list in a real deployment.
+_CORS_ORIGINS = os.environ.get("OPEN_GONG_CORS_ORIGINS")
+_CORS_KWARGS: dict = (
+    {"allow_origins": [o.strip() for o in _CORS_ORIGINS.split(",") if o.strip()]}
+    if _CORS_ORIGINS
+    else {
+        "allow_origin_regex": r"https?://(localhost|127\.0\.0\.1|\[::1\]|[\w-]+\.local"
+        r"|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?"
+    }
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
+    **_CORS_KWARGS,
 )
 
 app.include_router(agents_router)
