@@ -4,7 +4,11 @@
 
 Upload a call recording or paste a link. Get a speaker-labeled transcript, summary, objections, intent, next steps, and a follow-up email draft — where **every claim links to the exact line in the call that proves it**. No proof in the transcript, no claim in the notes.
 
-<!-- TODO(M11): killer screenshot / GIF goes here -->
+![A call's notes beside its transcript. Every claim carries a "❝ proof" chip; clicking one scrolls the transcript to the exact line that proves it and flashes it.](docs/images/call-detail.png)
+
+Click any **❝ proof** chip and the transcript jumps to the line that backs that claim. A claim with two supporting quotes says so (**proof ·2**). Nothing reaches the notes without one.
+
+![The call log: date, call, source, length, status and agent columns, with search, date-range, source, status and agent filters.](docs/images/call-log.png)
 
 ## Demo in seconds
 
