@@ -69,6 +69,36 @@ def test_call_detail_serves_insights_and_list_serves_agent_count(monkeypatch):
 
         row = next(r for r in c.get("/api/calls").json() if r["id"] == call_id)
         assert row["agent_count"] == 0
+        assert row["agents"] == []
+
+
+def test_list_calls_names_each_call_s_agents_and_returns_newest_first():
+    """The call log filters by agent, which needs a name per row (agent_count
+    alone can't back a filter), and a dense log must not read oldest-first."""
+    from sqlalchemy import select
+
+    from app.db import get_session
+    from app.models import Agent, AgentRun, Run
+
+    with client() as c:
+        with get_session() as session:
+            agent = Agent(name="QA Coach", description="d", system_prompt="p")
+            session.add(agent)
+            session.flush()
+            run = session.scalars(select(Run).where(Run.call_id == "sample-02")).first()
+            session.add(AgentRun(
+                call_id="sample-02", run_id=run.id, agent_id=agent.id, status="shipped", steps=[],
+            ))
+            session.commit()
+
+        rows = c.get("/api/calls").json()
+
+    # seeded in filename order, so newest-first is the reverse
+    assert [r["id"] for r in rows] == [f"sample-0{i}" for i in (5, 4, 3, 2, 1)]
+    row = next(r for r in rows if r["id"] == "sample-02")
+    assert row["agents"] == ["QA Coach"]
+    assert row["agent_count"] == 1
+    assert next(r for r in rows if r["id"] == "sample-01")["agents"] == []
 
 
 def test_seeded_agent_does_not_duplicate_the_guaranteed_baseline():
