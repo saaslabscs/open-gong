@@ -91,20 +91,21 @@ export default function Home() {
   );
 
   const visible = useMemo(() => {
-    const rows = calls.filter((c) => {
-      if (q && !c.title.toLowerCase().includes(q.toLowerCase())) return false;
-      if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
-      if (statusFilter !== "all" && c.run_status !== statusFilter) return false;
-      if (agentFilter !== "all" && !(c.agents ?? []).includes(agentFilter)) return false;
-      if (days > 0) {
-        const age = (now - new Date(c.recorded_at).getTime()) / 86400000;
-        if (age > days) return false;
-      }
-      return true;
-    });
     const value = SORT_VALUE[sort.key];
-    // filter() already copied, so sorting in place never touches `calls`.
-    return rows.sort((a, b) => (sort.dir === "asc" ? value(a) - value(b) : value(b) - value(a)));
+    return calls
+      .filter((c) => {
+        if (q && !c.title.toLowerCase().includes(q.toLowerCase())) return false;
+        if (sourceFilter !== "all" && c.source !== sourceFilter) return false;
+        if (statusFilter !== "all" && c.run_status !== statusFilter) return false;
+        if (agentFilter !== "all" && !(c.agents ?? []).includes(agentFilter)) return false;
+        if (days > 0) {
+          const age = (now - new Date(c.recorded_at).getTime()) / 86400000;
+          if (age > days) return false;
+        }
+        return true;
+      })
+      // sorts the array filter() just allocated, never `calls` itself
+      .sort((a, b) => (sort.dir === "asc" ? value(a) - value(b) : value(b) - value(a)));
   }, [calls, q, sourceFilter, statusFilter, agentFilter, days, now, sort]);
 
   function toggleSort(key: SortKey) {
