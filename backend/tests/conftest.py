@@ -3,6 +3,7 @@ import os
 os.environ["OPEN_GONG_NO_WORKER"] = "1"  # tests drive the job queue synchronously
 os.environ["PYAI_ADAPTER"] = "mock"  # never hit the real API from tests, whatever .env says
 
+import httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.db as db
 import app.llm as llm_mod
+import app.integrations.providers as providers_mod
 from app.api import ingest as ingest_mod
 from app.db import Base
 
@@ -47,5 +49,25 @@ def url_ingest(monkeypatch, tmp_path):
 
     def install(transport):
         monkeypatch.setattr(ingest_mod, "_TRANSPORT", transport)
+
+    return install
+
+
+@pytest.fixture
+def crm_http(monkeypatch):
+    """Point CRM token verification at a fake transport (mirrors url_ingest).
+
+    Routes are (url_fragment, status_code, json_body). A fresh Response is built
+    per request so the same route can serve repeated calls.
+    """
+
+    def install(*routes: tuple[str, int, dict]):
+        def handler(request: httpx.Request) -> httpx.Response:
+            for fragment, status, body in routes:
+                if fragment in str(request.url):
+                    return httpx.Response(status, json=body)
+            return httpx.Response(404, json={"message": "no route registered in test"})
+
+        monkeypatch.setattr(providers_mod, "_TRANSPORT", httpx.MockTransport(handler))
 
     return install
