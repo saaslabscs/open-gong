@@ -34,7 +34,10 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [days, setDays] = useState(30);
 
-  const [now, setNow] = useState(() => Date.now());
+  // Lazy initializer runs once, outside the render-purity check that flags
+  // calling Date.now() directly in the render body (react-hooks/purity).
+  // Day-granularity filtering doesn't need this to stay live-ticking.
+  const [now] = useState(() => Date.now());
 
   const visible = useMemo(() => {
     return calls.filter((c) => {
@@ -48,12 +51,6 @@ export default function Home() {
       return true;
     });
   }, [calls, q, sourceFilter, statusFilter, days, now]);
-
-  // Keep "now" fresh for the age-based filter without calling Date.now() during render.
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 2500);
-    return () => clearInterval(t);
-  }, []);
 
   const refresh = useCallback(() => listCalls().then(setCalls).catch(() => {}), []);
 
