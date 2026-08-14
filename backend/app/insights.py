@@ -13,6 +13,57 @@ SYSTEM = (
     "If something was not said on the call, it does not appear in your output."
 )
 
+_EVIDENCE = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {"quote": {"type": "string"}, "line": {"type": "integer"}},
+        "required": ["quote", "line"],
+    },
+}
+
+# The baseline every call gets. Built in on purpose: not pack-driven, not
+# configurable, so it cannot be switched off or mis-wired.
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}, "evidence": _EVIDENCE},
+                "required": ["text", "evidence"],
+            },
+        },
+        "objections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "detail": {"type": "string"},
+                    "status": {"type": "string"},
+                    "evidence": _EVIDENCE,
+                },
+                "required": ["label", "detail", "evidence"],
+            },
+        },
+        "next_steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "owner": {"type": "string"},
+                    "evidence": _EVIDENCE,
+                },
+                "required": ["text", "evidence"],
+            },
+        },
+    },
+    "required": ["summary", "objections", "next_steps"],
+}
+
 
 def _looks_clean(lines: list[dict]) -> bool:
     """True if the transcript already reads well (capitalized + punctuated),
@@ -85,3 +136,21 @@ def prettify_transcript(lines: list[dict]) -> tuple[list[dict], float]:
 
 def _transcript_text(lines: list[dict]) -> str:
     return "\n".join(f"[{l['line']}] {l['speaker']}: {l['text']}" for l in lines)
+
+
+def summarize(lines: list[dict]) -> tuple[dict, float]:
+    """Summary, objections and next steps — every claim carrying its quote.
+
+    Returns the raw model output; the caller runs it through
+    evidence.validate_extraction so dropped claims can be counted on the stage.
+    """
+    user = (
+        "Extract the following from this call transcript. Rules:\n"
+        "- every claim needs evidence: verbatim quote + line number\n"
+        "- summary: the few things a colleague must know, one claim each\n"
+        "- objections: concerns the other side raised, with how they were left\n"
+        "- next_steps: what was actually agreed, with an owner named on the call\n"
+        "- never invent, never embellish; omit a field rather than pad it\n\n"
+        f"{_transcript_text(lines)}"
+    )
+    return llm.complete_json(SYSTEM, user, SUMMARY_SCHEMA, max_tokens=4000)
