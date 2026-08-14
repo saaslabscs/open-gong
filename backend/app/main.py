@@ -22,7 +22,7 @@ from .api.review import router as review_router
 from .api.share import router as share_router
 from .api.skills import router as skills_router
 from .api.webhooks import router as webhooks_router
-from .db import Base, engine, get_session
+from .db import Base, engine, ensure_columns, get_session
 from .jobs import worker_loop
 from .models import Agent, AgentRun, Call, Run
 
@@ -30,6 +30,10 @@ from .models import Agent, AgentRun, Call, Run
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
+    # create_all only creates missing *tables* — a column added to a model after
+    # the database was first created needs an explicit ALTER, or every read of
+    # it dies with "no such column" on an upgraded install.
+    ensure_columns(engine)
     with get_session() as session:
         empty = session.scalars(select(Call).limit(1)).first() is None
     if empty:
