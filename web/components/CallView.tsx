@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { humanizeStatus, tonePill, stageLabels } from "@/lib/status";
 import { renderScalarField, type ClaimItem } from "@/lib/skillOutput";
+import InsightsPanel from "./Insights";
 
 function jumpTo(line: number) {
   const el = document.getElementById(`line-${line}`);
@@ -125,10 +126,15 @@ function AgentRunCard({ callId, agentRun, onChanged }: { callId: string; agentRu
           />
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
-      ) : (
-        Object.entries(agentRun.output ?? {}).map(([skillName, fields]) => (
+      ) : agentRun.output && Object.keys(agentRun.output).length > 0 ? (
+        Object.entries(agentRun.output).map(([skillName, fields]) => (
           <SkillOutput key={skillName} skillName={skillName} fields={fields} />
         ))
+      ) : (
+        <p className="text-sm text-neutral-500">
+          No skills applied.
+          {agentRun.routing_reasoning && ` ${agentRun.routing_reasoning}`}
+        </p>
       )}
     </div>
   );
@@ -140,6 +146,7 @@ export default function CallView({ id }: { id: string }) {
   const [share, setShare] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"summary" | "agents">("summary");
 
   const load = useCallback(() => getCall(id).then(setData).catch((e) => setErr(String(e))), [id]);
 
@@ -157,7 +164,7 @@ export default function CallView({ id }: { id: string }) {
   if (err) return <Shell><p className="text-sm text-red-600">{err}</p></Shell>;
   if (!data) return <Shell><p className="text-sm text-neutral-500">Loading…</p></Shell>;
 
-  const { call, run, transcript, agent_runs } = data;
+  const { call, run, transcript, agent_runs, insights } = data;
   const st = humanizeStatus(run.status);
 
   // "Still working" is a property of the run's status, not of how many agent
@@ -284,9 +291,43 @@ export default function CallView({ id }: { id: string }) {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-7">
-          {agent_runs.map((ar) => (
-            <AgentRunCard key={ar.id} callId={id} agentRun={ar} onChanged={load} />
-          ))}
+          <div className="flex gap-1 border-b border-neutral-200">
+            {([["summary", "Summary"], ["agents", `Agent runs`]] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+                  tab === key
+                    ? "border-neutral-900 font-medium text-neutral-900"
+                    : "border-transparent text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                {label}
+                {key === "agents" && agent_runs.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+                    {agent_runs.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {tab === "summary" ? (
+            <InsightsPanel insights={insights} onJump={jumpTo} />
+          ) : (
+            <>
+              {agent_runs.map((ar) => (
+                <AgentRunCard key={ar.id} callId={id} agentRun={ar} onChanged={load} />
+              ))}
+              {agent_runs.length === 0 && (
+                <div className="card text-sm text-neutral-500">
+                  No agents ran on this call.
+                  {run.orchestrator_reasoning && ` ${run.orchestrator_reasoning}`}
+                </div>
+              )}
+            </>
+          )}
+
           <ProcessingDetails run={run} />
         </div>
 
