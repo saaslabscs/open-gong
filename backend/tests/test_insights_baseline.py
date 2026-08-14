@@ -47,3 +47,10 @@ def test_unproven_claims_are_dropped_by_the_gate(monkeypatch):
     cleaned, dropped = validate_extraction(raw, LINES)
     assert [c["text"] for c in cleaned["summary"]] == ["eleven AMs"]
     assert len(dropped) == 1
+
+
+def test_compose_email_returns_subject_and_body(monkeypatch):
+    monkeypatch.setattr(insights.llm, "complete_json", fake_llm({}))
+    out, cost = insights.compose_email(LINES, {"summary": [], "next_steps": [], "objections": []})
+    assert set(out) == {"subject", "body"}
+    assert cost > 0

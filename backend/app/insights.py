@@ -5,6 +5,8 @@ seeded skills executed through skills/executor.py. See
 docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md §3.
 """
 
+import json
+
 from . import llm
 
 SYSTEM = (
@@ -154,3 +156,25 @@ def summarize(lines: list[dict]) -> tuple[dict, float]:
         f"{_transcript_text(lines)}"
     )
     return llm.complete_json(SYSTEM, user, SUMMARY_SCHEMA, max_tokens=4000)
+
+
+def compose_email(lines: list[dict], insights_so_far: dict) -> tuple[dict, float]:
+    """Draft a follow-up email grounded only in what was agreed on the call.
+
+    Returns ({"subject": str, "body": str}, cost).
+    """
+    schema = {
+        "type": "object",
+        "properties": {"subject": {"type": "string"}, "body": {"type": "string"}},
+        "required": ["subject", "body"],
+    }
+    grounding = {k: insights_so_far.get(k) for k in ("summary", "next_steps", "objections")}
+    user = (
+        "Draft a short, professional follow-up email from the company rep to the "
+        "customer, grounded ONLY in what was agreed on this call (use the extracted "
+        "next steps; do not promise anything not discussed). Plain text, no placeholders "
+        "like [Name] — use the actual names from the transcript.\n\n"
+        f"Extracted insights:\n{json.dumps(grounding, indent=1)[:3000]}\n\n"
+        f"Transcript:\n{_transcript_text(lines)}"
+    )
+    return llm.complete_json(SYSTEM, user, schema, max_tokens=800)
