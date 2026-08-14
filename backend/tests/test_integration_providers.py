@@ -44,6 +44,24 @@ def test_hubspot_verify_ok_without_account_info_scope(crm_http):
     assert result.account_ref is None
 
 
+def test_hubspot_verify_ok_despite_account_info_network_error(monkeypatch):
+    """A transport-level error on account-info must not fail the connection.
+    The label is best-effort; a network blip fetching it doesn't invalidate
+    a token that proved good on the contacts endpoint."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if CONTACTS in str(request.url):
+            return httpx.Response(200, json={"results": []})
+        if ACCOUNT in str(request.url):
+            raise httpx.ConnectError("connection reset by peer")
+        return httpx.Response(404, json={"message": "no route registered in test"})
+
+    monkeypatch.setattr(providers, "_TRANSPORT", httpx.MockTransport(handler))
+    result = verify_hubspot("pat-na1-good")
+    assert result.ok is True
+    assert result.account_label is None
+    assert result.account_ref is None
+
+
 def test_hubspot_verify_rejects_bad_token(crm_http):
     crm_http((CONTACTS, 401, {"message": "invalid token"}))
     result = verify_hubspot("nope")

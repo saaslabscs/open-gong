@@ -8,6 +8,7 @@ missing the scope fails here, at connect time, instead of at first sync.
 """
 
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 
 import httpx
@@ -73,12 +74,13 @@ def verify_hubspot(token: str) -> VerifyResult:
             # scope and only exposes a portal id, so a private app without that
             # scope still connects — just without a friendly name.
             label = ref = None
-            info = client.get(f"{HUBSPOT_API}/account-info/v3/details", headers=headers)
-            if info.status_code < 300:
-                portal = info.json().get("portalId")
-                if portal:
-                    ref = str(portal)
-                    label = f"Portal {ref}"
+            with suppress(httpx.HTTPError):
+                info = client.get(f"{HUBSPOT_API}/account-info/v3/details", headers=headers)
+                if info.status_code < 300:
+                    portal = info.json().get("portalId")
+                    if portal:
+                        ref = str(portal)
+                        label = f"Portal {ref}"
             return VerifyResult(ok=True, account_label=label, account_ref=ref)
     except httpx.HTTPError as e:
         return VerifyResult(ok=False, error=f"couldn't reach HubSpot: {e}")
