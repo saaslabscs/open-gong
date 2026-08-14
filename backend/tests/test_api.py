@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.jobs import run_due_jobs
 from app.main import app
 from scripts.seed import SAMPLES_DIR, seed
 
@@ -43,6 +44,31 @@ def test_seed_is_idempotent():
     assert n1 == n2
     with client() as c:
         assert len(c.get("/api/calls").json()) == n1
+
+
+def test_call_detail_serves_insights_and_list_serves_agent_count(monkeypatch):
+    from app import insights as insights_mod
+    from fakes import fake_llm
+
+    monkeypatch.setattr(
+        insights_mod.llm,
+        "complete_json",
+        fake_llm({"extract": {"summary": [], "objections": [], "next_steps": []}}),
+    )
+    wav = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" + b"\x00" * 20
+    with TestClient(app) as c:
+        call_id = c.post("/api/ingest/upload", files={"file": ("a.wav", wav, "audio/wav")}).json()["call_id"]
+        for _ in range(10):
+            if run_due_jobs() == 0:
+                break
+
+        detail = c.get(f"/api/calls/{call_id}").json()
+        assert detail["insights"] is not None
+        assert "summary" in detail["insights"]
+        assert "follow_up_email" in detail["insights"]
+
+        row = next(r for r in c.get("/api/calls").json() if r["id"] == call_id)
+        assert row["agent_count"] == 0
 
 
 # ---------------------------------------------------------------------------

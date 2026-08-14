@@ -103,6 +103,11 @@ def list_calls() -> list[dict]:
         out = []
         for c in calls:
             run = _latest_run(session, c.id)
+            agent_count = 0
+            if run is not None:
+                agent_count = len(
+                    session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).all()
+                )
             out.append(
                 {
                     "id": c.id,
@@ -111,6 +116,7 @@ def list_calls() -> list[dict]:
                     "duration_s": c.duration_s,
                     "recorded_at": c.recorded_at.isoformat(),
                     "run_status": run.status if run else "pending",
+                    "agent_count": agent_count,
                 }
             )
         return out
@@ -138,6 +144,7 @@ def get_call(call_id: str) -> dict:
                         "output": ar.edited_output or ar.output,
                         "edited": bool(ar.edited_output),
                         "cost_usd": ar.cost_usd,
+                        "routing_reasoning": ar.routing_reasoning,
                     }
                 )
 
@@ -160,6 +167,7 @@ def get_call(call_id: str) -> dict:
                 if call.transcript
                 else None
             ),
+            "insights": run.insights if run else None,
             "agent_runs": agent_runs_out,
         }
 

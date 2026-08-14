@@ -62,6 +62,7 @@ def test_get_call_agent_runs_shape_has_distinct_id_and_agent_id():
         ar = agent_runs[0]
         assert set(ar.keys()) == {
             "id", "agent_id", "agent_name", "status", "output", "edited", "steps", "cost_usd",
+            "routing_reasoning",
         }
         assert ar["id"] == agent_run_id
         assert ar["agent_id"] == agent_id
