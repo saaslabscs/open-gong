@@ -242,6 +242,13 @@ def run_insights(payload: dict) -> None:
             if ar.edited_output is not None
         }
         session.execute(delete(AgentRun).where(AgentRun.run_id == run_id))
+        # Every cost write below this point is additive (baseline, dispatch,
+        # agents) — zero the total once here, on entry, or a retry re-enters
+        # this handler and piles the new attempt's cost on top of the old
+        # one. POST /api/calls/{id}/retry resets stage bookkeeping and
+        # run.status but never touches run.cost_usd, so this is the only
+        # place a retry's cost total gets reset.
+        run.cost_usd = 0.0
         session.commit()
 
         lines = call.transcript.lines

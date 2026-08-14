@@ -8,10 +8,13 @@ regression fence.
 import json
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app import insights, pipeline
+from app.db import get_session
 from app.jobs import run_due_jobs
 from app.main import app
+from app.models import Run
 from fakes import fake_llm
 
 WAV = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" + b"\x00" * 20
@@ -94,3 +97,32 @@ def test_dropped_claims_make_the_run_partial(monkeypatch):
         detail = c.get(f"/api/calls/{call_id}").json()
 
     assert detail["run"]["status"] == "partial"
+
+
+def test_retry_does_not_compound_run_cost(monkeypatch):
+    """A retry re-enters run_insights for the same run_id (see
+    api/review.py's retry endpoint, which never touches run.cost_usd itself).
+    Every cost write inside run_insights is additive, so the total must be
+    zeroed once on entry — otherwise a retried run's cost keeps adding the
+    new attempt's cost on top of the old one forever.
+    """
+    monkeypatch.setattr(
+        insights.llm,
+        "complete_json",
+        fake_llm({"extract": {"summary": [], "objections": [], "next_steps": []}}),
+    )
+    with TestClient(app) as c:
+        call_id = _ingest(c)
+        _drain()
+
+    with get_session() as session:
+        run = session.scalars(select(Run).where(Run.call_id == call_id)).first()
+        run_id = run.id
+        first_attempt_cost = run.cost_usd
+    assert first_attempt_cost > 0
+
+    pipeline.run_insights({"call_id": call_id})  # re-enters the same run_id, as a retry does
+
+    with get_session() as session:
+        run = session.get(Run, run_id)
+        assert run.cost_usd == first_attempt_cost  # one attempt's cost, not two
