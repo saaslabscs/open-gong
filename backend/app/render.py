@@ -17,6 +17,17 @@ from .models import Agent, AgentRun
 
 EXCLUDED_SKILLS = {"compliance-check"}
 
+# The only insight sections that may leave the building. The 9 pre-cutover rows
+# also hold `intent` and `scorecard` blobs, which the current design retires —
+# passing Run.insights through verbatim would republish them from the *public*
+# share endpoint. to_markdown already whitelists by section; this is the same
+# rule for the structured paths.
+_PUBLIC_INSIGHT_KEYS = ("summary", "objections", "next_steps", "follow_up_email", "dropped_claims")
+
+
+def _public_insights(ins: dict | None) -> dict | None:
+    return {k: ins[k] for k in _PUBLIC_INSIGHT_KEYS if k in ins} if ins else None
+
 
 def effective_agent_outputs(session, run) -> list[dict]:
     """[{"agent_name", "output", "edited"}, ...] for every AgentRun on this
@@ -122,7 +133,8 @@ def to_markdown(call, run, agent_outputs: list[dict], *, include_transcript: boo
 
 
 def export_json(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
-    """Full structured export — includes evidence, excludes compliance-check."""
+    """Full structured export — includes evidence, excludes compliance-check
+    and the retired insight sections."""
     return {
         "call": {
             "id": call.id,
@@ -131,17 +143,18 @@ def export_json(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
             "recorded_at": call.recorded_at.isoformat(),
         },
         "run": {"status": run.status, "edited": any(ao["edited"] for ao in agent_outputs)},
-        "insights": run.insights,
+        "insights": _public_insights(run.insights),
         "agent_runs": agent_outputs,
     }
 
 
 def share_snapshot(call, run, agent_outputs: list[dict]) -> dict[str, Any]:
-    """Frozen at share time. No raw transcript, no compliance-check."""
+    """Frozen at share time. No raw transcript, no compliance-check, and none
+    of the retired insight sections."""
     return {
         "title": call.title,
         "recorded_at": call.recorded_at.isoformat(),
         "duration_s": call.duration_s,
-        "insights": run.insights,
+        "insights": _public_insights(run.insights),
         "agent_runs": agent_outputs,
     }
