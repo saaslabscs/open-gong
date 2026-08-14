@@ -28,3 +28,6 @@ web/.next/
 # Local data
 backend/data/
 *.sqlite3
+
+# Brainstorming companion mockups (superpowers)
+.superpowers/
