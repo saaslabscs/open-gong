@@ -1,7 +1,12 @@
 """Seed the database: built-in skills, the Call Summarizer agent, and the
-five sample calls (re-processed through the real agent path — see
-docs/superpowers/specs/2026-08-13-agent-skill-architecture-design.md
-Known risks #1 for why this requires live API keys).
+five sample calls.
+
+The samples ship with their results precomputed in
+`fixtures/samples/*.json`, and that is what gets loaded — transcript,
+baseline stages and insights. No LLM is called, so `make demo` works with
+zero API keys, as README.md promises. It also means every database contains
+a pre-cutover-shaped insights row, which is what the backward-compatibility
+tests assert against.
 
 No agent is seeded with is_orchestrator=True: Call Summarizer needs to
 actually run, and an orchestrator-flagged agent is excluded from the
@@ -21,8 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 
-from app.db import Base, engine, get_session
-from app.jobs import enqueue, run_due_jobs
+from app.db import Base, engine, ensure_columns, get_session
 from app.models import Agent, AgentSkill, Call, Run, Skill, Transcript
 
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "samples"
@@ -130,6 +134,14 @@ BUILTIN_SKILLS = [
     },
 ]
 
+# What the seeded Call Summarizer is linked to. `summary-and-next-steps` and
+# `follow-up-email` are deliberately absent: the pipeline's guaranteed baseline
+# already produces both on every call, so linking them here would make a fresh
+# install pay for a duplicate summary and a duplicate email and show each of
+# them twice. The Skill rows themselves stay — an existing user's own links to
+# them must keep working.
+AGENT_SKILL_NAMES = ["sales-scorecard", "support-scorecard", "compliance-check"]
+
 
 def seed_agents_and_skills() -> None:
     with get_session() as session:
@@ -150,24 +162,51 @@ def seed_agents_and_skills() -> None:
         if agent is None:
             agent = Agent(name="Call Summarizer", description="", system_prompt="")
             session.add(agent)
-        agent.description = "Summarizes calls and scores them against sales/support/compliance rubrics"
+        agent.description = "Scores calls against sales/support/compliance rubrics"
         agent.system_prompt = (
-            "Always run summary-and-next-steps and compliance-check. Use "
-            "sales-scorecard for sales calls (discovery, demo, pricing, "
-            "negotiation) and support-scorecard for support calls (existing "
-            "customer issues, billing, cancellations) — not both. Always run "
-            "follow-up-email last."
+            "Always run compliance-check. Use sales-scorecard for sales calls "
+            "(discovery, demo, pricing, negotiation) and support-scorecard for "
+            "support calls (existing customer issues, billing, cancellations) "
+            "— not both. The call's summary and follow-up email are produced "
+            "by the pipeline itself; never duplicate them here."
         )
         session.flush()
 
         existing_links = {
             l.skill_id for l in session.scalars(select(AgentSkill).where(AgentSkill.agent_id == agent.id)).all()
         }
-        for skill_name, row in skill_rows.items():
+        for skill_name in AGENT_SKILL_NAMES:
+            row = skill_rows[skill_name]
             if row.id not in existing_links:
                 session.add(AgentSkill(agent_id=agent.id, skill_id=row.id))
 
         session.commit()
+
+
+def _baseline_from_fixture(data: dict) -> tuple[list[dict], str]:
+    """The precomputed baseline stages and run status for one sample.
+
+    Nothing is spent seeding a sample, so every stage costs 0.0. An absent
+    `follow_up_email` is a failed `compose_email` and a `partial` run, exactly
+    as the live pipeline would record it — sample-04 is that case, and its
+    fixture even carries the original error.
+    """
+    email_ok = bool(data["insights"].get("follow_up_email"))
+    recorded = {s["name"]: s for s in data["run"]["stages"]}
+    return (
+        [
+            {"name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None},
+            {"name": "summarize", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None},
+            {
+                "name": "compose_email",
+                "status": "ok" if email_ok else "failed",
+                "attempts": 1 if email_ok else 3,
+                "cost_usd": 0.0,
+                "error": None if email_ok else recorded.get("compose_email", {}).get("error"),
+            },
+        ],
+        "shipped" if email_ok else "partial",
+    )
 
 
 def seed_sample_calls() -> int:
@@ -197,21 +236,24 @@ def seed_sample_calls() -> int:
             if run is None:
                 run = Run(call_id=call.id)
                 session.add(run)
-            run.status = "running"
-            run.stages = [{"name": "transcribe", "status": "ok", "attempts": 1, "cost_usd": 0.0, "error": None}]
+            # The fixture's insights ARE the baseline's output, already
+            # evidence-checked (see test_fixture_evidence_invariant). Loading
+            # them is what keeps the demo keyless; regenerating them would
+            # need live API keys and would mark all five samples failed
+            # without them.
+            run.stages, run.status = _baseline_from_fixture(data)
+            run.insights = data["insights"]
+            run.cost_usd = 0.0
 
             count += 1
         session.commit()
 
-    for path in sorted(SAMPLES_DIR.glob("*.json")):
-        data = json.loads(path.read_text())
-        enqueue("run_insights", {"call_id": data["call"]["id"]})
-    run_due_jobs()
     return count
 
 
 def seed() -> int:
     Base.metadata.create_all(engine)
+    ensure_columns(engine)
     seed_agents_and_skills()
     return seed_sample_calls()
 

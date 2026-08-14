@@ -24,11 +24,15 @@ def _call_and_run(session, call_id: str) -> tuple[Call, Run]:
     run = session.scalars(
         select(Run).where(Run.call_id == call_id).order_by(Run.created_at.desc())
     ).first()
-    has_output = run is not None and session.scalars(
-        select(AgentRun).where(AgentRun.run_id == run.id)
-    ).first() is not None
+    # A call legitimately has notes with no agent runs at all: the guaranteed
+    # baseline writes Run.insights before any agent dispatches, and the seeded
+    # samples ship exactly that way. Gate on "is there anything to render".
+    has_output = run is not None and (
+        run.insights is not None
+        or session.scalars(select(AgentRun).where(AgentRun.run_id == run.id)).first() is not None
+    )
     if not has_output:
-        raise HTTPException(409, "call has no agent output to export yet")
+        raise HTTPException(409, "call has no notes to export yet")
     return call, run
 
 
