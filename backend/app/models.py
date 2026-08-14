@@ -59,6 +59,9 @@ class Run(Base):
     # [{"name","status","attempts","cost_usd","error"}] — transcribe-stage bookkeeping only;
     # per-skill steps live on AgentRun.steps now
     stages: Mapped[list] = mapped_column(JSON, default=list)
+    # {summary, objections, next_steps, follow_up_email, dropped_claims} — the guaranteed
+    # baseline's output, written before agent dispatch. Independent of AgentRun.output.
+    insights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     orchestrator_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -23,6 +23,7 @@ from sqlalchemy import select
 from ..db import DATA_DIR, get_session
 from ..jobs import enqueue
 from ..models import Call, Run
+from ..run_state import STAGES
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
@@ -49,7 +50,10 @@ class IncompleteDownload(Exception):
 
 
 def _fresh_stages() -> list[dict]:
-    return [{"name": "transcribe", "status": "pending", "attempts": 0, "cost_usd": 0.0, "error": None}]
+    return [
+        {"name": s, "status": "pending", "attempts": 0, "cost_usd": 0.0, "error": None}
+        for s in STAGES
+    ]
 
 
 # --- audio container introspection -----------------------------------------

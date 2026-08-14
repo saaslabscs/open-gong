@@ -13,16 +13,18 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 
+from . import insights as insights_mod
 from . import orchestrator as orchestrator_mod
 from . import skill_router as skill_router_mod
 from .adapters.pyai.base import get_adapter
-from .agent_runtime import new_agent_run_state
+from .agent_runtime import AgentRunState, new_agent_run_state
 from .db import get_session
 from .entry_rules import resolve_entry_rule
+from .evidence import validate_extraction
 from .insights import prettify_transcript
 from .jobs import enqueue, handler
 from .models import Agent, AgentRun, AgentSkill, Call, Run, Skill
-from .run_state import BudgetExceeded, StageFailed, max_cost_per_run
+from .run_state import BudgetExceeded, CRITICAL_STAGES, STAGES, StageFailed, max_cost_per_run
 from .skills import executor as executor_mod
 from .transcription import deliver_transcript, update_transcript_lines
 
@@ -183,6 +185,25 @@ def _run_one_agent(agent: Agent, skills: list[Skill], call_id: str, run_id: str,
         return 0.0
 
 
+def _persist_baseline(run_id: str, rs: AgentRunState, baseline: dict, dropped: list[dict]) -> None:
+    """Write the baseline stages and insights onto the Run.
+
+    Unions into Run.stages by name: updates entries that exist (so `transcribe`,
+    already ok, survives) and appends the ones that don't. Appending matters —
+    a Run built before this change, or by a test, carries only `transcribe`, and
+    an update-only merge would silently drop the baseline stages.
+    """
+    with get_session() as session:
+        run = session.get(Run, run_id)
+        by_name = {s["name"]: s for s in rs.as_dicts()}
+        merged = [dict(s, **by_name.pop(s["name"], {})) for s in run.stages]
+        merged.extend(by_name[n] for n in STAGES if n in by_name)
+        run.stages = merged
+        run.insights = baseline or None
+        run.cost_usd = round((run.cost_usd or 0.0) + rs.spent, 4)
+        session.commit()
+
+
 def _aggregate_status(statuses: list[str]) -> str:
     if not statuses:
         return "shipped"
@@ -223,8 +244,52 @@ def run_insights(payload: dict) -> None:
         session.execute(delete(AgentRun).where(AgentRun.run_id == run_id))
         session.commit()
 
+        lines = call.transcript.lines
+
+    # The guaranteed baseline. Runs before dispatch so agents never gate it.
+    rs = new_agent_run_state(["summarize", "compose_email"], critical=CRITICAL_STAGES)
+    baseline: dict = {}
+    dropped: list[dict] = []
+
+    def do_summarize():
+        raw, cost = insights_mod.summarize(lines)
+        rs.charge("summarize", cost)
+        cleaned, drops = validate_extraction(raw, lines)
+        dropped.extend(drops)
+        rs._get("summarize").dropped_claims = len(drops)
+        return cleaned
+
     try:
-        _dispatch_and_run(call_id, run_id, preserved_edits)
+        baseline = rs.execute("summarize", do_summarize)
+    except (StageFailed, BudgetExceeded):
+        rs.skip_remaining("summarize")
+        _persist_baseline(run_id, rs, baseline, dropped)
+        # A failed critical stage stops the chain here — agents never dispatch
+        # over a call with no summary. Still must land in a terminal state, or
+        # the Run is stuck "running" forever with no retry signal.
+        with get_session() as session:
+            run = session.get(Run, run_id)
+            if run is not None:
+                run.status = "failed"
+                run.finished_at = datetime.now(timezone.utc)
+                session.commit()
+        return
+
+    def do_email():
+        email, cost = insights_mod.compose_email(lines, baseline)
+        rs.charge("compose_email", cost)
+        return email
+
+    try:
+        baseline["follow_up_email"] = rs.execute("compose_email", do_email)
+    except (StageFailed, BudgetExceeded):
+        pass  # non-critical: the summary still ships
+
+    baseline["dropped_claims"] = len(dropped)
+    _persist_baseline(run_id, rs, baseline, dropped)
+
+    try:
+        _dispatch_and_run(call_id, run_id, preserved_edits, rs)
     except Exception as e:  # noqa: BLE001 — reason recorded on the Run, not swallowed
         # An unexpected failure anywhere in dispatch/routing/execution (e.g.
         # malformed LLM JSON the orchestrator itself doesn't guard against)
@@ -244,7 +309,9 @@ def run_insights(payload: dict) -> None:
                 session.commit()
 
 
-def _dispatch_and_run(call_id: str, run_id: str, preserved_edits: dict[str, dict] | None = None) -> None:
+def _dispatch_and_run(
+    call_id: str, run_id: str, preserved_edits: dict[str, dict] | None, rs: AgentRunState
+) -> None:
     with get_session() as session:
         call = session.get(Call, call_id)
         run = session.get(Run, run_id)
@@ -286,7 +353,9 @@ def _dispatch_and_run(call_id: str, run_id: str, preserved_edits: dict[str, dict
             )
 
         run.orchestrator_reasoning = reasoning
-        run.cost_usd = round(fmt_cost + dispatch_cost, 4)
+        # Additive, not a reset: the guaranteed baseline (summarize/compose_email)
+        # already persisted its own cost onto this Run before dispatch started.
+        run.cost_usd = round((run.cost_usd or 0.0) + fmt_cost + dispatch_cost, 4)
         session.commit()
 
         agents_to_run = [(a, agent_skills[a.id]) for a in selected_agents]
@@ -315,7 +384,7 @@ def _dispatch_and_run(call_id: str, run_id: str, preserved_edits: dict[str, dict
         for ar in agent_runs:
             if preserved_edits and ar.agent_id in preserved_edits:
                 ar.edited_output = preserved_edits[ar.agent_id]
-        run.status = _aggregate_status([ar.status for ar in agent_runs])
+        run.status = _aggregate_status([rs.final_status()] + [ar.status for ar in agent_runs])
         run.cost_usd = round(run.cost_usd + sum(ar.cost_usd for ar in agent_runs), 4)
         if budget_note:
             run.orchestrator_reasoning = f"{run.orchestrator_reasoning}\n\n{budget_note}"
