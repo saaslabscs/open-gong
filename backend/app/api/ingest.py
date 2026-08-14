@@ -38,7 +38,6 @@ _BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 )
-_MAX_RANGE_REQUESTS = 50
 _HEAD_BYTES = 64  # covers a RIFF/WAVE header and every magic number we sniff
 
 # Tests inject an httpx.MockTransport here; None means a real network client.
@@ -154,7 +153,7 @@ def _fetch_recording(url: str, dest: Path) -> tuple[int, bytes]:
     with httpx.Client(
         transport=_TRANSPORT, follow_redirects=True, timeout=60
     ) as client, dest.open("wb") as fh:
-        for _ in range(_MAX_RANGE_REQUESTS):
+        while True:
             headers = {"User-Agent": _BROWSER_UA, "Range": f"bytes={written}-"}
             with client.stream("GET", url, headers=headers) as resp:
                 if written and resp.status_code == 200:
@@ -191,10 +190,6 @@ def _fetch_recording(url: str, dest: Path) -> tuple[int, bytes]:
                 raise IncompleteDownload(
                     f"download stalled at {written:,} of {target:,} bytes"
                 )
-
-    raise IncompleteDownload(
-        f"gave up after {_MAX_RANGE_REQUESTS} range requests at {written:,} bytes"
-    )
 
 
 def _sha256_file(path: Path) -> str:

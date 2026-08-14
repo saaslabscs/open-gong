@@ -106,6 +106,23 @@ def test_range_resume_downloads_the_whole_recording(url_ingest):
     assert Path(saved).read_bytes() == payload
 
 
+def test_range_resume_handles_more_than_fifty_small_chunks(url_ingest):
+    """A CDN that always caps each response to ~250 KB (real bifrost.justcall.io
+    behaviour) needs far more than 50 round trips for an ordinary-sized call —
+    the retry loop must be bounded by bytes downloaded, not request count."""
+    payload = _wav(WAV_BYTE_RATE * 500)  # ~16 MB, ~64 requests at cap=249_999
+    url_ingest(_serve(payload, cap=249_999, honor_range=True))
+
+    with TestClient(app) as c:
+        resp = c.post("/api/ingest/url", json={"url": STREAM_URL})
+        assert resp.status_code == 200, resp.text
+        saved = _audio_path_of(resp.json()["call_id"])
+
+    from pathlib import Path
+
+    assert Path(saved).read_bytes() == payload
+
+
 def test_body_shorter_than_its_own_container_header_is_rejected(url_ingest):
     """Server is honest about what it sends, but the WAV says it should be bigger."""
     short = _wav(200_000, declared_total=8_000_000)
